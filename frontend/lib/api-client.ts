@@ -1,0 +1,464 @@
+/**
+ * Centralized API Client for Backend Integration
+ * Handles authentication, forms, and submissions with proper typing
+ */
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// ==================== Types ====================
+
+export interface User {
+  id: number;
+  username: string;
+  email: string;
+  role: 'user' | 'employee' | 'superemployee' | 'admin';
+}
+
+export interface AuthTokens {
+  access: string;
+  refresh: string;
+}
+
+export interface SocialAuthResponse {
+  user: User;
+  access_token: string;
+  refresh_token: string;
+}
+
+export interface FormFieldStructure {
+  id: string;
+  type: 'text' | 'number' | 'dropdown' | 'radio' | 'checkbox';
+  labels: { [languageCode: string]: string };
+  descriptions?: { [languageCode: string]: string };
+  required: boolean;
+  options?: string[];
+}
+
+export interface FormRelationship {
+  field_id: string;
+  target_form_slug: string;
+  display_field: string;
+}
+
+export interface FormSchema {
+  id: number;
+  title: string;
+  slug: string;
+  description: string;
+  language_config: {
+    primary: string;
+    optional: string[];
+  };
+  fields_structure: FormFieldStructure[];
+  relationships: FormRelationship[];
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+  submission_count: number;
+}
+
+export interface CreateFormPayload {
+  title: string;
+  description?: string;
+  language_config?: {
+    primary: string;
+    optional: string[];
+  };
+  fields_structure: FormFieldStructure[];
+  relationships?: FormRelationship[];
+}
+
+export interface FormSubmission {
+  id: number;
+  form_schema: number;
+  form_title: string;
+  form_slug: string;
+  data: { [fieldId: string]: any };
+  submitted_at: string;
+  submitted_by: number | null;
+  ip_address: string;
+}
+
+export interface SubmitFormPayload {
+  slug: string;
+  data: { [fieldId: string]: any };
+}
+
+// ==================== Token Management ====================
+
+export class TokenManager {
+  private static ACCESS_TOKEN_KEY = 'access_token';
+  private static REFRESH_TOKEN_KEY = 'refresh_token';
+  private static USER_KEY = 'user';
+
+  static setTokens(access: string, refresh: string) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(this.ACCESS_TOKEN_KEY, access);
+      localStorage.setItem(this.REFRESH_TOKEN_KEY, refresh);
+    }
+  }
+
+  static getAccessToken(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(this.ACCESS_TOKEN_KEY);
+    }
+    return null;
+  }
+
+  static getRefreshToken(): string | null {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(this.REFRESH_TOKEN_KEY);
+    }
+    return null;
+  }
+
+  static clearTokens() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.ACCESS_TOKEN_KEY);
+      localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+      localStorage.removeItem(this.USER_KEY);
+    }
+  }
+
+  static setUser(user: User) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+    }
+  }
+
+  static getUser(): User | null {
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem(this.USER_KEY);
+      return userStr ? JSON.parse(userStr) : null;
+    }
+    return null;
+  }
+
+  static isAuthenticated(): boolean {
+    return !!this.getAccessToken();
+  }
+}
+
+// ==================== API Error Handling ====================
+
+export class APIError extends Error {
+  constructor(
+    public status: number,
+    public statusText: string,
+    public data: any
+  ) {
+    super(`API Error ${status}: ${statusText}`);
+    this.name = 'APIError';
+  }
+}
+
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new APIError(response.status, response.statusText, errorData);
+  }
+  return response.json();
+}
+
+// ==================== HTTP Client ====================
+
+interface RequestOptions extends RequestInit {
+  requireAuth?: boolean;
+}
+
+async function request<T>(
+  endpoint: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const { requireAuth = false, ...fetchOptions } = options;
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...fetchOptions.headers,
+  };
+
+  if (requireAuth) {
+    const token = TokenManager.getAccessToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const url = `${API_BASE_URL}${endpoint}`;
+  
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      headers,
+    });
+
+    return handleResponse<T>(response);
+  } catch (error) {
+    if (error instanceof APIError && error.status === 401 && requireAuth) {
+      // Token expired, try to refresh
+      const refreshed = await refreshAccessToken();
+      if (refreshed) {
+        // Retry request with new token
+        const token = TokenManager.getAccessToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const response = await fetch(url, {
+          ...fetchOptions,
+          headers,
+        });
+        return handleResponse<T>(response);
+      } else {
+        // Refresh failed, clear tokens and redirect to login
+        TokenManager.clearTokens();
+        if (typeof window !== 'undefined') {
+          window.location.href = '/admin/login';
+        }
+        throw error;
+      }
+    }
+    throw error;
+  }
+}
+
+// ==================== Authentication API ====================
+
+/**
+ * Refresh access token using refresh token
+ * Note: Backend needs to implement this endpoint
+ */
+async function refreshAccessToken(): Promise<boolean> {
+  const refreshToken = TokenManager.getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/users/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      TokenManager.setTokens(data.access, refreshToken);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export const authAPI = {
+  /**
+   * Handle social auth callback
+   * Backend endpoint: GET /api/users/social/{provider}/callback/?code={code}
+   */
+  async handleSocialCallback(
+    provider: 'tiktok' | 'facebook' | 'instagram',
+    code: string
+  ): Promise<SocialAuthResponse> {
+    const response = await request<SocialAuthResponse>(
+      `/api/users/social/${provider}/callback/?code=${code}`
+    );
+    
+    // Store tokens
+    TokenManager.setTokens(response.access_token, response.refresh_token);
+    TokenManager.setUser(response.user);
+    
+    return response;
+  },
+
+  /**
+   * Login with email/password (JWT)
+   * Note: Backend needs to implement this endpoint
+   */
+  async login(email: string, password: string): Promise<AuthTokens & { user: User }> {
+    const response = await request<AuthTokens & { user: User }>(
+      '/api/users/login/',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }
+    );
+
+    TokenManager.setTokens(response.access, response.refresh);
+    TokenManager.setUser(response.user);
+    
+    return response;
+  },
+
+  /**
+   * Get current user profile
+   * Note: Backend needs to implement this endpoint
+   */
+  async getCurrentUser(): Promise<User> {
+    return request<User>('/api/users/me/', { requireAuth: true });
+  },
+
+  /**
+   * Logout (clear local tokens)
+   */
+  logout() {
+    TokenManager.clearTokens();
+  },
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated(): boolean {
+    return TokenManager.isAuthenticated();
+  },
+
+  /**
+   * Get stored user data
+   */
+  getUser(): User | null {
+    return TokenManager.getUser();
+  },
+};
+
+// ==================== Forms API ====================
+
+export const formsAPI = {
+  /**
+   * List all forms (requires auth)
+   * Backend endpoint: GET /api/forms/
+   */
+  async listForms(): Promise<FormSchema[]> {
+    return request<FormSchema[]>('/api/forms/', { requireAuth: true });
+  },
+
+  /**
+   * Get form by slug
+   * Backend endpoint: GET /api/forms/{slug}/
+   */
+  async getForm(slug: string): Promise<FormSchema> {
+    return request<FormSchema>(`/api/forms/${slug}/`, { requireAuth: true });
+  },
+
+  /**
+   * Get public form (no auth required)
+   * Backend endpoint: GET /api/forms/{slug}/public/
+   */
+  async getPublicForm(slug: string): Promise<FormSchema> {
+    return request<FormSchema>(`/api/forms/${slug}/public/`);
+  },
+
+  /**
+   * Create new form (SuperEmployee only)
+   * Backend endpoint: POST /api/forms/
+   */
+  async createForm(payload: CreateFormPayload): Promise<FormSchema> {
+    return request<FormSchema>('/api/forms/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      requireAuth: true,
+    });
+  },
+
+  /**
+   * Update form by slug (SuperEmployee only)
+   * Backend endpoint: PUT /api/forms/{slug}/
+   */
+  async updateForm(slug: string, payload: Partial<CreateFormPayload>): Promise<FormSchema> {
+    return request<FormSchema>(`/api/forms/${slug}/`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+      requireAuth: true,
+    });
+  },
+
+  /**
+   * Partial update form (SuperEmployee only)
+   * Backend endpoint: PATCH /api/forms/{slug}/
+   */
+  async patchForm(slug: string, payload: Partial<CreateFormPayload>): Promise<FormSchema> {
+    return request<FormSchema>(`/api/forms/${slug}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+      requireAuth: true,
+    });
+  },
+
+  /**
+   * Get form submissions
+   * Backend endpoint: GET /api/forms/{slug}/submissions/
+   */
+  async getFormSubmissions(
+    slug: string,
+    filters?: { search?: string; [key: string]: any }
+  ): Promise<FormSubmission[]> {
+    const queryParams = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          queryParams.append(key, String(value));
+        }
+      });
+    }
+    const queryString = queryParams.toString();
+    const endpoint = queryString
+      ? `/api/forms/${slug}/submissions/?${queryString}`
+      : `/api/forms/${slug}/submissions/`;
+
+    return request<FormSubmission[]>(endpoint, { requireAuth: true });
+  },
+
+  /**
+   * Get related form data for dropdowns
+   * Backend endpoint: GET /api/forms/{slug}/related_data/
+   */
+  async getRelatedData(
+    slug: string,
+    targetSlug: string,
+    displayField: string
+  ): Promise<any[]> {
+    return request<any[]>(
+      `/api/forms/${slug}/related_data/?target_slug=${targetSlug}&display_field=${displayField}`,
+      { requireAuth: true }
+    );
+  },
+};
+
+// ==================== Submissions API ====================
+
+export const submissionsAPI = {
+  /**
+   * Submit form response
+   * Backend endpoint: POST /api/submissions/
+   * Note: Backend should allow public submissions
+   */
+  async submitForm(payload: SubmitFormPayload): Promise<FormSubmission> {
+    return request<FormSubmission>('/api/submissions/', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * List all submissions (only for user's forms)
+   * Backend endpoint: GET /api/submissions/
+   */
+  async listSubmissions(): Promise<FormSubmission[]> {
+    return request<FormSubmission[]>('/api/submissions/', { requireAuth: true });
+  },
+
+  /**
+   * Get specific submission
+   * Backend endpoint: GET /api/submissions/{id}/
+   */
+  async getSubmission(id: number): Promise<FormSubmission> {
+    return request<FormSubmission>(`/api/submissions/${id}/`, { requireAuth: true });
+  },
+};
+
+// ==================== Export Default Client ====================
+
+const apiClient = {
+  auth: authAPI,
+  forms: formsAPI,
+  submissions: submissionsAPI,
+};
+
+export default apiClient;
