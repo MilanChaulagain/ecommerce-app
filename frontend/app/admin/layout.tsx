@@ -90,7 +90,7 @@ export default function AdminLayout({
               <div className="w-7 h-7 bg-gradient-to-r from-blue-600 to-purple-600 rounded flex items-center justify-center text-white text-xs font-bold">
                 H
               </div>
-              <span className="text-sm font-semibold hidden sm:block">Admin Portal</span>
+              <span className="text-sm font-semibold hidden sm:block text-purple-500">Admin Portal</span>
             </div>
           </div>
 
@@ -101,7 +101,7 @@ export default function AdminLayout({
             </div>
             <button
               onClick={handleLogout}
-              className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+              className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />
