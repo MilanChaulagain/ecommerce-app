@@ -8,6 +8,7 @@ import {
   FormBuilderState,
   toBackendFieldStructure,
   fromBackendFieldStructure,
+  FormSchema,
 } from '@/lib/form-builder-types';
 import apiClient from '@/lib/api-client';
 
@@ -63,9 +64,10 @@ export function useFormBuilder() {
         currentLanguage: formData.language_config.primary,
         isEditMode: true,
       }));
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error loading form:', error);
-      alert(`Failed to load form: ${error?.data?.detail || error.message}`);
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      alert(`Failed to load form: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -96,13 +98,19 @@ export function useFormBuilder() {
   const updateField = (updates: Partial<FormField>) => {
     if (!state.selectedField) return;
 
-    setState(prev => ({
-      ...prev,
-      fields: prev.fields.map(f => 
-        f.id === state.selectedField?.id ? { ...f, ...updates } : f
-      ),
-      selectedField: state.selectedField ? { ...state.selectedField, ...updates } : null,
-    }));
+    setState(prev => {
+      if (!prev.selectedField) return prev;
+      
+      const updatedField = { ...prev.selectedField, ...updates };
+      
+      return {
+        ...prev,
+        fields: prev.fields.map(f => 
+          f.id === prev.selectedField?.id ? updatedField : f
+        ),
+        selectedField: updatedField,
+      };
+    });
   };
 
   const deleteField = (fieldId: string) => {
@@ -114,11 +122,21 @@ export function useFormBuilder() {
   };
 
   const selectField = (field: FormField) => {
-    setState(prev => ({ ...prev, selectedField: field }));
+    setState(prev => {
+      // Always select the field from the fields array to ensure we have the latest state
+      const fieldFromArray = prev.fields.find(f => f.id === field.id);
+      return { ...prev, selectedField: fieldFromArray || field };
+    });
   };
 
   const reorderFields = (newFields: FormField[]) => {
-    setState(prev => ({ ...prev, fields: newFields }));
+    setState(prev => {
+      // Update selectedField reference if it exists in the reordered fields
+      const updatedSelectedField = prev.selectedField 
+        ? newFields.find(f => f.id === prev.selectedField?.id) || prev.selectedField
+        : null;
+      return { ...prev, fields: newFields, selectedField: updatedSelectedField };
+    });
   };
 
   const saveForm = async () => {
@@ -147,7 +165,7 @@ export function useFormBuilder() {
         relationships: state.relationships,
       };
 
-      let formData;
+      let formData: FormSchema;
       
       if (state.isEditMode && state.formSlug) {
         // Update existing form
@@ -183,9 +201,9 @@ export function useFormBuilder() {
           currentLanguage: 'en',
         });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving form:', error);
-      const errorMessage = error?.data?.detail || error?.data?.error || error.message;
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       alert(`Failed to save form: ${errorMessage}`);
     } finally {
       setLoading(false);

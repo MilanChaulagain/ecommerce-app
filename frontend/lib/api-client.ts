@@ -85,7 +85,6 @@ export interface SubmitFormPayload {
 }
 
 // ==================== Token Management ====================
-
 export class TokenManager {
   private static ACCESS_TOKEN_KEY = 'access_token';
   private static REFRESH_TOKEN_KEY = 'refresh_token';
@@ -172,10 +171,15 @@ async function request<T>(
 ): Promise<T> {
   const { requireAuth = false, ...fetchOptions } = options;
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...fetchOptions.headers,
   };
+
+  // Merge existing headers if any
+  if (fetchOptions.headers) {
+    const existingHeaders = fetchOptions.headers as Record<string, string>;
+    Object.assign(headers, existingHeaders);
+  }
 
   if (requireAuth) {
     const token = TokenManager.getAccessToken();

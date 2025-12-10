@@ -4,8 +4,8 @@ import { LucideIcon } from 'lucide-react';
 // Backend field types
 export type BackendFieldType = 'text' | 'number' | 'dropdown' | 'radio' | 'checkbox';
 
-// Extended frontend field types (for UI convenience)
-export type FieldType = BackendFieldType | 'email' | 'tel' | 'textarea' | 'date' | 'time' | 'url';
+// Frontend field types (UI uses 'select' instead of 'dropdown')
+export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'email' | 'tel' | 'textarea' | 'date' | 'time' | 'url';
 
 export interface FieldOption {
   value: string;
@@ -139,10 +139,17 @@ export function fromBackendFieldStructure(
     labels: backendField.labels,
     name: backendField.id,
     required: backendField.required,
-    options: backendField.options?.map((value, index) => ({
-      value,
-      label: `Option ${index + 1}`, // Could be improved with translations
-    })),
+    options: backendField.options?.map((value) => {
+      // Convert value to a readable label (capitalize and replace underscores with spaces)
+      const label = value
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      return {
+        value,
+        label,
+      };
+    }),
     descriptions: backendField.descriptions,
   };
 }

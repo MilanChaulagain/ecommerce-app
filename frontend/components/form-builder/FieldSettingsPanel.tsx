@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { FormField } from '@/lib/form-builder-types';
 import TextFieldSettings from './field-settings/TextFieldSettings';
 import NumberFieldSettings from './field-settings/NumberFieldSettings';

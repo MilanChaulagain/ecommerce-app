@@ -44,11 +44,17 @@ const SortableField = ({
         return <textarea className={baseClasses} placeholder={field.placeholder} disabled />;
       case 'select':
         return (
-          <select className={baseClasses} disabled>
+          <select 
+            key={`select-${field.id}-${field.options?.length || 0}`}
+            className={baseClasses} 
+            disabled
+          >
             <option>{field.placeholder || 'Select...'}</option>
             {field.options && field.options.length > 0 ? (
               field.options.map((opt, idx) => (
-                <option key={idx} value={opt.value}>{opt.label}</option>
+                <option key={`${field.id}-opt-${idx}-${opt.value}`} value={opt.value}>
+                  {opt.label}
+                </option>
               ))
             ) : (
               <option disabled>No options added yet</option>
