@@ -29,7 +29,7 @@ const getOAuthConfig = (provider: SocialProvider, backendCallback: string): OAut
       return {
         clientId: fbAppId,
         authUrl: `https://www.facebook.com/v17.0/dialog/oauth`,
-        scope: 'email,public_profile',
+        scope: 'public_profile',
         requiresPKCE: false,
       };
     
@@ -48,7 +48,7 @@ const getOAuthConfig = (provider: SocialProvider, backendCallback: string): OAut
       if (!ttClientKey) return null;
       return {
         clientId: ttClientKey,
-        authUrl: `https://www.tiktok.com/v2/auth/authorize/`,
+        authUrl: `https://www.tiktok.com/v2/auth/authorize`,
         scope: 'user.info.basic',
         requiresPKCE: true,
       };
@@ -86,21 +86,56 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  // No justOpened logic needed
 
-  // Close modal when clicking outside
+  // Listen for OAuth success messages from popup
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === 'oauth_success') {
+        // Store tokens if provided
+        if (event.data.accessToken) {
+          localStorage.setItem('access_token', event.data.accessToken);
+          localStorage.setItem('admin_token', event.data.accessToken);
+        }
+        if (event.data.refreshToken) {
+          localStorage.setItem('refresh_token', event.data.refreshToken);
+        }
+        
+        // Close modal and stay on same page
+        setIsLoading(null);
+        onClose();
+        
+        // Dispatch custom event for components to react to login
+        window.dispatchEvent(new CustomEvent('userLoggedIn', { 
+          detail: { accessToken: event.data.accessToken } 
+        }));
+      } else if (event.data.type === 'oauth_error') {
+        setIsLoading(null);
+        setError(event.data.message || 'Authentication failed');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onClose]);
+
+  // No justOpened logic needed
+
+  // Classic click outside to close logic
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
         onClose();
       }
     };
-
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('click', handleClickOutside);
     }
-
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('click', handleClickOutside);
     };
   }, [isOpen, onClose]);
 
@@ -108,19 +143,30 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
 
   const handleSocialLogin = async (provider: SocialProvider) => {
     try {
+      console.log(`🔵 Step 1: Starting ${provider} login...`);
       setIsLoading(provider);
       setError(null);
 
-      const backendCallback = `${API_BASE_URL}/api/users/social/${provider}/callback/`;
+      // Use ngrok URL for TikTok OAuth, localhost for internal API calls
+      const oauthBackendUrl = process.env.NEXT_PUBLIC_OAUTH_BACKEND_URL || API_BASE_URL;
+      const backendCallback = provider === 'tiktok' 
+        ? `${oauthBackendUrl}/api/users/social/${provider}/callback/`
+        : `${API_BASE_URL}/api/users/social/${provider}/callback/`;
+      
+      console.log(`🔵 Step 2: Backend callback URL: ${backendCallback}`);
+      
       const config = getOAuthConfig(provider, backendCallback);
 
       // Validate OAuth configuration
       if (!config) {
+        console.log("❌ Config is not set");
         const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
         setError(`${providerName} login is not configured. Please contact support.`);
         setIsLoading(null);
         return;
       }
+      
+      console.log(`🔵 Step 3: OAuth config obtained:`, config);
 
       let finalAuthUrl: string;
 
@@ -129,8 +175,15 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
         const codeVerifier = generateCodeVerifier();
         const codeChallenge = await generateCodeChallenge(codeVerifier);
         
-        // Store verifier for callback
+        // Store verifier - backend will read it from the authorization code callback
         sessionStorage.setItem(`${provider}_code_verifier`, codeVerifier);
+        
+        // Encode code_verifier in state parameter so backend can retrieve it
+        const timestamp = new Date().getTime();
+        const state = btoa(JSON.stringify({ 
+          code_verifier: codeVerifier,
+          timestamp: timestamp
+        }));
 
         const params = new URLSearchParams({
           client_key: config.clientId,
@@ -139,6 +192,7 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
           response_type: 'code',
           code_challenge: codeChallenge,
           code_challenge_method: 'S256',
+          state: state,
         });
 
         finalAuthUrl = `${config.authUrl}?${params.toString()}`;
@@ -155,20 +209,27 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
         finalAuthUrl = `${config.authUrl}?${params.toString()}`;
       }
 
+      console.log(`🔵 Step 4: Final auth URL: ${finalAuthUrl}`);
+
       // Open OAuth popup
+      console.log(`🔵 Step 5: Opening popup...`);
       const popup = openOAuthPopup(finalAuthUrl, provider);
       
       if (!popup) {
+        console.log('❌ Step 6: Failed to open popup');
         setError('Failed to open authentication window. Please check your popup blocker.');
         setIsLoading(null);
         return;
       }
 
+      console.log(`✅ Step 6: Popup opened successfully`);
+
       // Monitor popup state
+      console.log(`🔵 Step 7: Starting to monitor popup...`);
       monitorPopup(popup);
 
     } catch (err) {
-      console.error(`${provider} OAuth error:`, err);
+      console.error(`❌ ${provider} OAuth error:`, err);
       setError(`Failed to initiate ${provider} login. Please try again.`);
       setIsLoading(null);
     }
@@ -176,6 +237,9 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
 
   // Open OAuth popup with optimal settings
   const openOAuthPopup = (url: string, provider: string): Window | null => {
+    console.log(`🔵 openOAuthPopup called for ${provider}`);
+    console.log(`🔵 URL: ${url}`);
+    
     const width = 600;
     const height = 700;
     const left = window.screen.width / 2 - width / 2;
@@ -194,7 +258,11 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
       'menubar=0',
     ].join(',');
 
-    return window.open(url, `${provider}_oauth`, features);
+    console.log(`🔵 Opening window with features: ${features}`);
+    const popup = window.open(url, `${provider}_oauth`, features);
+    console.log(`🔵 Popup result:`, popup);
+    
+    return popup;
   };
 
   // Monitor popup closure and handle callbacks
@@ -208,7 +276,10 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
         const token = localStorage.getItem('admin_token');
         if (token) {
           onClose();
-          window.location.reload();
+          // Dispatch custom event for components to react to login
+          window.dispatchEvent(new CustomEvent('userLoggedIn', { 
+            detail: { accessToken: token } 
+          }));
         }
       }
     }, 500);
@@ -257,7 +328,10 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
           <div className="p-3 space-y-2">
             {/* Facebook Login */}
             <button
-              onClick={() => handleSocialLogin('facebook')}
+              onClick={() => {
+                console.log('🟢 FACEBOOK BUTTON CLICKED!');
+                handleSocialLogin('facebook');
+              }}
               disabled={isLoading !== null}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-[#1877F2] hover:bg-[#1664D8] text-white rounded font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >

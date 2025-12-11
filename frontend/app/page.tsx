@@ -10,12 +10,14 @@ export default function Home() {
   return (
     <>
       <Navbar />
-      <Hero />
-      <Categories />
-      <FlashSales />
-      <PromotionalBanners />
-      <FeaturedProducts />
-      <Footer />
+      <div style={{ paddingBottom: '80px' }}>
+        <Hero />
+        <Categories />
+        <FlashSales />
+        <PromotionalBanners />
+        <FeaturedProducts />
+        <Footer />
+      </div>
     </>
   );
 }

@@ -27,7 +27,13 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-#bz*ec_qxuyl4oq)cfliqpibb-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = [
+    'localhost', 
+    '127.0.0.1',
+    'mayme-maintainable-josephina.ngrok-free.dev',  # ngrok domain for TikTok OAuth
+    '.ngrok-free.app',  # Allow any ngrok-free.app subdomain
+    '.ngrok.io',  # Allow any ngrok.io subdomain
+]
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
@@ -35,6 +41,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
+    "https://mayme-maintainable-josephina.ngrok-free.dev",  # ngrok URL
 ]
 CORS_ALLOW_CREDENTIALS = True
 

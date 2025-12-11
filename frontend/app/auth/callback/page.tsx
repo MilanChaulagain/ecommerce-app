@@ -66,24 +66,74 @@ export default function AuthCallbackPage() {
 
       // Backend sends tokens directly in URL after successful OAuth
       if (accessToken && refreshToken) {
-        // Store tokens
+        // Store tokens with keys that match what the app expects
         localStorage.setItem('access_token', accessToken);
         localStorage.setItem('refresh_token', refreshToken);
+        localStorage.setItem('admin_token', accessToken); // For admin panel
         
-        setStatus('success');
-        setMessage('Login successful! Redirecting...');
+        console.log('✅ OAuth Success - Tokens stored');
+        console.log('🔑 Access Token:', accessToken.substring(0, 20) + '...');
+        console.log('🔄 Refresh Token:', refreshToken.substring(0, 20) + '...');
+
+        // Fetch and log user data
+        try {
+          const userData = await apiClient.auth.getCurrentUser();
+          
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('👤 USER DATA AFTER LOGIN:');
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('📋 Full User Object:', userData);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.log('📊 User Details:');
+          console.log('   ID:', userData.id);
+          console.log('   Username:', userData.username);
+          console.log('   Email:', userData.email);
+          console.log('   Role:', userData.role || 'N/A');
+          console.log('   Provider:', provider);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          
+          // Create a formatted object for easy copying
+          const userSummary = {
+            id: userData.id,
+            username: userData.username,
+            email: userData.email,
+            role: userData.role || 'user',
+            provider: provider,
+            loginTime: new Date().toISOString(),
+            tokens: {
+              access: accessToken.substring(0, 20) + '...',
+              refresh: refreshToken.substring(0, 20) + '...'
+            }
+          };
+          
+          console.log('📦 User Summary (copy this):', JSON.stringify(userSummary, null, 2));
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+          setStatus('success');
+          setMessage(`Successfully logged in as ${userData.username}!`);
+        } catch (userError) {
+          console.error('⚠️ Failed to fetch user data:', userError);
+          setStatus('success');
+          setMessage('Login successful! Redirecting...');
+        }
+
         
-        // Notify opener window (popup)
-        if (window.opener) {
+        // Try to notify opener window first
+        if (window.opener && !window.opener.closed) {
           window.opener.postMessage(
-            { type: 'oauth_success' },
+            { 
+              type: 'oauth_success',
+              accessToken: accessToken,
+              refreshToken: refreshToken 
+            },
             window.location.origin
           );
-          setTimeout(() => window.close(), 1000);
-        } else {
-          // Not a popup, redirect to home
-          setTimeout(() => router.push('/'), 2000);
         }
+        
+        // Close this window/tab immediately (works for both popup and tab)
+        setTimeout(() => {
+          window.close();
+        }, 100);
       } else {
         setStatus('error');
         setMessage('Missing authentication tokens.');
@@ -121,8 +171,14 @@ export default function AuthCallbackPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-green-600 mb-2">Success!</h2>
-            <p className="text-gray-600">{message}</p>
+            <h2 className="text-2xl font-bold text-green-600 mb-2">Login Successful!</h2>
+            <p className="text-gray-600 mb-4">You can close this window and return to the main page.</p>
+            <button 
+              onClick={() => window.close()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Close Window
+            </button>
           </>
         )}
         

@@ -26,33 +26,110 @@ def generate_jwt(user):
 class TikTokLoginCallback(APIView):
     def get(self, request):
         code = request.query_params.get('code')
-        code_verifier = request.query_params.get('code_verifier')
+        state = request.query_params.get('state')
+        
+        # Extract code_verifier from state parameter
+        code_verifier = None
+        if state:
+            try:
+                import json
+                import base64
+                state_data = json.loads(base64.b64decode(state))
+                code_verifier = state_data.get('code_verifier')
+                print(f"Extracted code_verifier from state: {code_verifier[:10]}..." if code_verifier else "No code_verifier in state")
+            except Exception as e:
+                print(f"Failed to parse state parameter: {e}")
         
         if not code:
-            return Response({"error": "Authorization code is required"}, status=status.HTTP_400_BAD_REQUEST)
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            error_redirect = f"{frontend_url}/auth/callback?provider=tiktok&error=missing_code&message=Authorization code is required"
+            return redirect(error_redirect)
         
-        token_url = "https://open-api.tiktok.com/oauth/access_token/"
+        # Use the exact redirect_uri that was registered with TikTok (no query params)
+        redirect_uri = os.getenv('TIKTOK_REDIRECT_URI', f"{request.scheme}://{request.get_host()}/api/users/social/tiktok/callback/")
+        
+        # TikTok v2 API uses different endpoint and format
+        token_url = "https://open.tiktokapis.com/v2/oauth/token/"
+        
+        # TikTok v2 requires application/x-www-form-urlencoded with specific headers
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cache-Control': 'no-cache'
+        }
+        
         data = {
             "client_key": os.getenv("TIKTOK_CLIENT_KEY"),
             "client_secret": os.getenv("TIKTOK_CLIENT_SECRET"),
             "code": code,
-            "grant_type": "authorization_code"
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri
         }
         
-        # Add code_verifier for PKCE if provided
-        if code_verifier:
-            data["code_verifier"] = code_verifier
+        # Note: TikTok does NOT accept code_verifier in token exchange
+        # PKCE is only used during authorization (code_challenge)
+        # Do not add code_verifier here - it causes error 10002
         
-        token_resp = requests.post(token_url, data=data).json()
-        access_token = token_resp.get('data', {}).get('access_token')
-        open_id = token_resp.get('data', {}).get('open_id')
-        if not access_token:
-            return Response({"error": "Failed to get TikTok access token"}, status=status.HTTP_400_BAD_REQUEST)
+        # Log the request details for debugging
+        print("=" * 60)
+        print("TikTok Token Exchange Request:")
+        print(f"URL: {token_url}")
+        print(f"Headers: {headers}")
+        print(f"Request Data:")
+        print(f"  client_key: {data.get('client_key', 'NOT SET')}")
+        print(f"  client_secret: {'*' * 20 if data.get('client_secret') else 'NOT SET'}")
+        print(f"  code: {code[:20]}..." if code and len(code) > 20 else f"  code: {code}")
+        print(f"  grant_type: {data['grant_type']}")
+        print(f"  redirect_uri: {redirect_uri}")
+        print("=" * 60)
         
-        user_info_url = f"https://open-api.tiktok.com/oauth/userinfo/?access_token={access_token}&open_id={open_id}"
-        user_info = requests.get(user_info_url).json().get('data', {})
+        try:
+            token_resp = requests.post(token_url, data=data, headers=headers).json()
+            
+            # Log full response for debugging
+            print("TikTok Token Response:")
+            print(token_resp)
+            print("=" * 60)
+            
+            # Check for errors in response
+            if 'error' in token_resp:
+                error_msg = token_resp.get('error_description', token_resp.get('error', 'Unknown error'))
+                print(f"TikTok OAuth Error: {error_msg}")
+                print(f"Full error response: {token_resp}")
+                
+                frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+                error_redirect = f"{frontend_url}/auth/callback?provider=tiktok&error=token_exchange_failed&message={error_msg}"
+                return redirect(error_redirect)
+            
+            # TikTok v2 API returns tokens at root level, not under 'data'
+            access_token = token_resp.get('access_token')
+            open_id = token_resp.get('open_id')
+            
+            if not access_token:
+                print(f"No access token in response: {token_resp}")
+                frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+                error_redirect = f"{frontend_url}/auth/callback?provider=tiktok&error=no_access_token&message=Failed to get access token from TikTok"
+                return redirect(error_redirect)
+        except Exception as e:
+            print(f"TikTok API Exception: {str(e)}")
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            error_redirect = f"{frontend_url}/auth/callback?provider=tiktok&error=api_exception&message={str(e)}"
+            return redirect(error_redirect)
+        
+        # TikTok v2 API user info endpoint
+        user_info_url = "https://open.tiktokapis.com/v2/user/info/"
+        user_info_headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        user_info_params = {
+            'fields': 'open_id,union_id,avatar_url,display_name'
+        }
+        
+        user_info_response = requests.get(user_info_url, headers=user_info_headers, params=user_info_params).json()
+        user_info = user_info_response.get('data', {}).get('user', {})
+        
         username = user_info.get('display_name') or f"tiktok_{open_id}"
-        email = user_info.get('email') or f"{username}@tiktok.com"
+        email = f"{username.replace(' ', '_')}@tiktok.com"
 
         user = get_or_create_user(username, email)
         tokens = generate_jwt(user)
@@ -66,33 +143,83 @@ class TikTokLoginCallback(APIView):
 class FacebookLoginCallback(APIView):
     def get(self, request):
         code = request.query_params.get('code')
-        if not code:
-            return Response({"error": "Authorization code is required"}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Log incoming request
+        print("=" * 60)
+        print("Facebook OAuth Callback Received")
+        print(f"Code: {code[:20]}..." if code else "Code: None")
+        print(f"Full URL: {request.build_absolute_uri()}")
+        print("=" * 60)
+        
+        if not code:
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            error_redirect = f"{frontend_url}/auth/callback?provider=facebook&error=missing_code&message=Authorization code is required"
+            return redirect(error_redirect)
+        
+        # Prepare token exchange request
+        redirect_uri = os.getenv("FB_REDIRECT_URI")
         token_url = "https://graph.facebook.com/v17.0/oauth/access_token"
         params = {
             "client_id": os.getenv("FB_APP_ID"),
             "client_secret": os.getenv("FB_APP_SECRET"),
-            "redirect_uri": os.getenv("FB_REDIRECT_URI"),
+            "redirect_uri": redirect_uri,
             "code": code
         }
-        token_resp = requests.get(token_url, params=params).json()
-        access_token = token_resp.get("access_token")
-        if not access_token:
-            return Response({"error": "Failed to get Facebook access token"}, status=status.HTTP_400_BAD_REQUEST)
-
-        user_info_url = "https://graph.facebook.com/me"
-        user_info = requests.get(user_info_url, params={"access_token": access_token, "fields": "id,name,email"}).json()
-        username = user_info.get('name')
-        email = user_info.get('email') or f"{username}@facebook.com"
-
-        user = get_or_create_user(username, email)
-        tokens = generate_jwt(user)
         
-        # Redirect to frontend callback with tokens
-        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
-        redirect_url = f"{frontend_url}/auth/callback?provider=facebook&code=success&access_token={tokens['access']}&refresh_token={tokens['refresh']}"
-        return redirect(redirect_url)
+        # Log token exchange request
+        print("Facebook Token Exchange Request:")
+        print(f"URL: {token_url}")
+        print(f"Client ID: {params['client_id']}")
+        print(f"Redirect URI: {redirect_uri}")
+        print(f"Code: {code[:20]}...")
+        print("=" * 60)
+        
+        try:
+            token_resp = requests.get(token_url, params=params).json()
+            
+            # Log full response
+            print("Facebook Token Response:")
+            print(token_resp)
+            print("=" * 60)
+            
+            access_token = token_resp.get("access_token")
+            
+            if not access_token:
+                # Check for error in response
+                error_msg = token_resp.get('error', {}).get('message', 'Unknown error')
+                print(f"Facebook Error: {error_msg}")
+                
+                frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+                error_redirect = f"{frontend_url}/auth/callback?provider=facebook&error=token_exchange_failed&message={error_msg}"
+                return redirect(error_redirect)
+            
+            # Fetch user info
+            user_info_url = "https://graph.facebook.com/me"
+            user_info = requests.get(user_info_url, params={
+                "access_token": access_token, 
+                "fields": "id,name,email"
+            }).json()
+            
+            print("Facebook User Info:")
+            print(user_info)
+            print("=" * 60)
+            
+            username = user_info.get('name')
+            email = user_info.get('email') or f"{username.replace(' ', '_')}@facebook.com"
+
+            user = get_or_create_user(username, email)
+            tokens = generate_jwt(user)
+            
+            # Redirect to frontend callback with tokens
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            redirect_url = f"{frontend_url}/auth/callback?provider=facebook&code=success&access_token={tokens['access']}&refresh_token={tokens['refresh']}"
+            return redirect(redirect_url)
+            
+        except Exception as e:
+            print(f"Exception in Facebook OAuth: {str(e)}")
+            frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+            error_redirect = f"{frontend_url}/auth/callback?provider=facebook&error=api_exception&message={str(e)}"
+            return redirect(error_redirect)
 
 # ---------------- Instagram ----------------
 class InstagramLoginCallback(APIView):
