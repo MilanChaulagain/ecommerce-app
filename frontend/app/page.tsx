@@ -9,7 +9,6 @@ import Footer from "@/components/Footer";
 export default function Home() {
   return (
     <>
-      <Navbar />
       <div style={{ paddingBottom: '80px' }}>
         <Hero />
         <Categories />

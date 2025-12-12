@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { Search, ShoppingCart, Menu, X, User, Facebook, Instagram, Music, LogOut, Bell } from 'lucide-react';
 import LoginModal from './LoginModal';
+import ProfileModal from './ProfileModal';
 import { useTheme, createGradient } from '@/hooks/useTheme';
 import apiClient from '@/lib/api-client';
+import { useRouter } from 'next/navigation';
 
 export default function Navbar() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -12,28 +15,40 @@ export default function Navbar() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string>('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const loginModalRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
+  const router = useRouter();
 
   // Check login status on mount and listen for login events
   useEffect(() => {
     const checkLoginStatus = () => {
       const token = localStorage.getItem('admin_token');
+      const cachedUserName = localStorage.getItem('admin_username');
       if (token) {
         setIsLoggedIn(true);
-        // Fetch user data
-        apiClient.auth.getCurrentUser().then(user => {
-          setUserName(user.username);
-        }).catch(() => {
-          // If token is invalid, clear it
-          localStorage.removeItem('admin_token');
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          setIsLoggedIn(false);
-        });
+        if (cachedUserName) {
+          setUserName(cachedUserName);
+        } else {
+          // Fetch user data only if not cached
+          apiClient.auth.getCurrentUser().then(user => {
+            setUserName(user.username);
+            localStorage.setItem('admin_username', user.username);
+          }).catch(() => {
+            // If token is invalid, clear it
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            localStorage.removeItem('admin_username');
+            setIsLoggedIn(false);
+            setUserName('');
+          });
+        }
       } else {
         setIsLoggedIn(false);
+        setUserName('');
+        localStorage.removeItem('admin_username');
       }
     };
 
@@ -44,6 +59,7 @@ export default function Navbar() {
       setIsLoggedIn(true);
       apiClient.auth.getCurrentUser().then(user => {
         setUserName(user.username);
+        localStorage.setItem('admin_username', user.username);
         console.log(`Welcome, ${user.username}! 🎉`);
       }).catch(err => {
         console.error('Failed to fetch user:', err);
@@ -60,6 +76,7 @@ export default function Navbar() {
         // Token was removed (logout in another tab)
         setIsLoggedIn(false);
         setUserName('');
+        localStorage.removeItem('admin_username');
       }
     };
 
@@ -76,10 +93,12 @@ export default function Navbar() {
     localStorage.removeItem('admin_token');
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('admin_username');
     setIsLoggedIn(false);
     setUserName('');
     setShowUserMenu(false);
-    window.location.reload();
+    setShowProfileModal(false);
+    // No full page reload
   };
 
   // // Close login modal when clicking outside
@@ -128,15 +147,7 @@ export default function Navbar() {
         {/* Logo and Brand */}
         <div className="flex items-center" style={{ gap: theme.spacing.sm }}>
           <div style={logoStyle}>
-            <span 
-              style={{
-                color: theme.components.navbar.logo.textColor,
-                fontSize: theme.components.navbar.logo.fontSize,
-                fontWeight: theme.components.navbar.logo.fontWeight as 'bold',
-              }}
-            >
-              {theme.brand.name.charAt(0)}
-            </span>
+            <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: theme.components.navbar.logo.borderRadius }} />
           </div>
           <span 
             style={{
@@ -181,8 +192,8 @@ export default function Navbar() {
                 outline: 'none',
                 transition: 'border-color 0.2s',
               }}
-              onFocus={(e) => e.currentTarget.style.borderColor = theme.components.navbar.searchBar.focusBorderColor}
-              onBlur={(e) => e.currentTarget.style.borderColor = theme.components.navbar.searchBar.borderColor}
+              onFocus={() => router.push('/search')}
+              readOnly
             />
           </div>
         </div>
@@ -402,17 +413,9 @@ export default function Navbar() {
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden',
             }}>
-              <span style={{
-                fontSize: '1.25rem',
-                fontWeight: 'bold',
-                background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>
-                {theme.brand.name.charAt(0)}
-              </span>
+              <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: '50%' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
               <span style={{
@@ -514,53 +517,56 @@ export default function Navbar() {
                 }}>Login</span>
               </button>
             ) : (
-              <button 
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  backgroundColor: 'white',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-                }}
-              >
-                <div style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontWeight: 'bold',
-                  fontSize: '11px',
-                }}>
-                  {userName.charAt(0).toUpperCase()}
-                </div>
-                <span style={{
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  color: '#FF6B8A',
-                  maxWidth: '50px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {userName}
-                </span>
-              </button>
+              <>
+                <button 
+                  onClick={() => setShowProfileModal(true)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    backgroundColor: 'white',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                  }}
+                >
+                  <div style={{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '11px',
+                  }}>
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                  <span style={{
+                    fontSize: '0.875rem',
+                    fontWeight: '600',
+                    color: '#FF6B8A',
+                    maxWidth: '50px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {userName}
+                  </span>
+                </button>
+                {/* ProfileModal will be rendered below search bar for mobile */}
+              </>
             )}
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="px-4">
+        <div className="px-4" style={{ position: 'relative' }}>
           <div style={{
             position: 'relative',
             backgroundColor: 'white',
@@ -593,6 +599,8 @@ export default function Navbar() {
                 color: '#1F2937',
                 backgroundColor: 'transparent',
               }}
+              onFocus={() => router.push('/search')}
+              readOnly
             />
             <button style={{
               position: 'absolute',
@@ -613,6 +621,12 @@ export default function Navbar() {
               Search
             </button>
           </div>
+          {/* ProfileModal below search bar in mobile view */}
+          {showProfileModal && (
+            <div className="md:hidden" style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 8px)', zIndex: 50, display: 'flex', justifyContent: 'center' }}>
+              <ProfileModal isOpen={true} onClose={() => setShowProfileModal(false)} userName={userName} onLogout={handleLogout} />
+            </div>
+          )}
         </div>
       </div>
 
