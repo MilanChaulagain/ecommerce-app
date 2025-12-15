@@ -19,26 +19,22 @@ const LanguageModal: React.FC<Props> = ({ isOpen, onClose, current = 'en', onCha
     onClose();
   };
 
+  // Small popover style, positioned below the button (parent must be relative)
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose}></div>
-      <div className="bg-white rounded-lg shadow-lg p-6 z-10 w-11/12 max-w-sm">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">Select Language</h3>
-        <div className="space-y-2">
-          <button
-            onClick={() => setLang('en')}
-            className={`w-full text-left px-4 py-2 rounded ${current === 'en' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}>
-            English
-          </button>
-          <button
-            onClick={() => setLang('ne')}
-            className={`w-full text-left px-4 py-2 rounded ${current === 'ne' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}>
-            नेपाली
-          </button>
-        </div>
-        <div className="mt-4 text-right">
-          <button onClick={onClose} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">Close</button>
-        </div>
+    <div className="absolute z-50 mt-2 right-0 min-w-[120px] w-32 bg-white rounded-lg shadow-xl border border-gray-200 p-2 animate-fade-in-down cursor-pointer" style={{top: '100%'}}>
+      <div className="flex flex-col gap-1">
+        <button
+          onClick={() => setLang('en')}
+          className={`w-full text-left px-3 py-1.5 rounded text-blue-400 text-sm ${current === 'en' ? 'bg-blue-50 text-blue-700 font-semibold' : 'hover:bg-gray-50'}`}
+        >
+          English
+        </button>
+        <button
+          onClick={() => setLang('ne')}
+          className={`w-full text-left px-3 py-1.5 rounded text-blue-400 text-sm ${current === 'ne' ? 'bg-blue-50 text-blue-700 font-semibold' : 'hover:bg-gray-50'}`}
+        >
+          नेपाली
+        </button>
       </div>
     </div>
   );

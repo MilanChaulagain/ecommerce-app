@@ -19,6 +19,35 @@ export default function AdminDashboard() {
   const [previewForm, setPreviewForm] = useState<FormSchema | null>(null);
   const [notAuth, setNotAuth] = useState(false);
 
+    const fetchDashboardData = async () => {
+    try {
+      // Fetch forms using API client
+      const formsData: FormSchema[] = await apiClient.forms.listForms();
+      
+      setRecentForms(formsData.slice(0, 5)); // Get latest 5 forms
+      
+      // Calculate stats
+      const totalSubmissions = formsData.reduce((sum: number, form: FormSchema) => 
+        sum + (form.submission_count || 0), 0
+      );
+      
+      setStats({
+        totalForms: formsData.length,
+        totalSubmissions: totalSubmissions,
+        activeUsers: 12, // Mock data
+        pendingReviews: 2, // Mock data
+      });
+    } catch (error: any) {
+      console.error('Error fetching dashboard data:', error);
+      
+      // If unauthorized, show not-authenticated modal
+      if (error?.status === 401) {
+        setNotAuth(true);
+        return;
+      }
+    }
+  };
+
   useEffect(() => {
     // If user is not authenticated, show a modal instead of fetching data
     const isAuth = apiClient.auth.isAuthenticated();
@@ -42,34 +71,7 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
-      // Fetch forms using API client
-      const formsData: FormSchema[] = await apiClient.forms.listForms();
-      
-      setRecentForms(formsData.slice(0, 5)); // Get latest 5 forms
-      
-      // Calculate stats
-      const totalSubmissions = formsData.reduce((sum: number, form: FormSchema) => 
-        sum + (form.submission_count || 0), 0
-      );
-      
-      setStats({
-        totalForms: formsData.length,
-        totalSubmissions: totalSubmissions,
-        activeUsers: 1245, // Mock data
-        pendingReviews: 23, // Mock data
-      });
-    } catch (error: any) {
-      console.error('Error fetching dashboard data:', error);
-      
-      // If unauthorized, show not-authenticated modal
-      if (error?.status === 401) {
-        setNotAuth(true);
-        return;
-      }
-    }
-  };
+
 
   const handleDeleteForm = async (formSlug: string) => {
     // Note: Backend has DELETE disabled (returns 403)

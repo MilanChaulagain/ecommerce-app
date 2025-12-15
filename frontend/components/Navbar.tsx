@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, startTransition } from 'react';
 import Image from 'next/image';
-import { Search, ShoppingCart, Menu, X, User, Facebook, Instagram, Music, LogOut, Bell, TrendingUp, Globe } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, User, Bell, TrendingUp, Globe } from 'lucide-react';
 import LoginModal from './LoginModal';
 import ProfileModal from './ProfileModal';
 import LanguageModal from './LanguageModal';
@@ -19,6 +19,31 @@ export default function Navbar() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const languageBtnRef = useRef<HTMLButtonElement>(null);
+    // Close language modal on outside click or Escape
+    useEffect(() => {
+      if (!showLanguageModal) return;
+      function handleClick(e: MouseEvent) {
+        if (
+          languageBtnRef.current &&
+          !languageBtnRef.current.contains(e.target as Node)
+        ) {
+          const dropdown = document.getElementById('language-dropdown');
+          if (dropdown && !dropdown.contains(e.target as Node)) {
+            setShowLanguageModal(false);
+          }
+        }
+      }
+      function handleEsc(e: KeyboardEvent) {
+        if (e.key === 'Escape') setShowLanguageModal(false);
+      }
+      document.addEventListener('mousedown', handleClick);
+      document.addEventListener('keydown', handleEsc);
+      return () => {
+        document.removeEventListener('mousedown', handleClick);
+        document.removeEventListener('keydown', handleEsc);
+      };
+    }, [showLanguageModal]);
   const [language, setLanguage] = useState('en');
   const loginModalRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -68,7 +93,9 @@ export default function Navbar() {
 
     // read language from localStorage
     const storedLang = typeof window !== 'undefined' ? localStorage.getItem('lang') : null;
-    if (storedLang) setLanguage(storedLang);
+    if (storedLang) {
+      startTransition(() => setLanguage(storedLang));
+    }
 
     // Listen for login event (from popup)
     const handleUserLoggedIn = () => {
@@ -228,9 +255,6 @@ export default function Navbar() {
           <button onClick={() => router.push('/cart')} className="text-sm text-gray-700 hover:text-blue-600">Cart</button>
           <button onClick={() => router.push('/flash-sales')} className="text-sm text-gray-700 hover:text-blue-600">Flash Sales</button>
           <button onClick={() => router.push('/promotions')} className="text-sm text-gray-700 hover:text-blue-600">Promotions</button>
-          <button onClick={() => setShowLanguageModal(true)} className="text-sm text-gray-700 hover:text-blue-600 flex items-center gap-2">
-            <Globe className="w-4 h-4" /> {language === 'ne' ? 'ने' : 'EN'}
-          </button>
         </div>
 
         {/* Action Buttons */}
@@ -477,6 +501,22 @@ export default function Navbar() {
               0
             </span>
           </button>
+          <div style={{ position: 'relative' }}>
+            <button
+              ref={languageBtnRef}
+              onClick={() => setShowLanguageModal((v) => !v)}
+              className="text-sm text-gray-700 hover:text-blue-600 flex items-center gap-2"
+              aria-haspopup="true"
+              aria-expanded={showLanguageModal}
+            >
+              <Globe className="w-4 h-4" /> {language === 'ne' ? 'ने' : 'EN'}
+            </button>
+            {showLanguageModal && (
+              <div id="language-dropdown" style={{ position: 'absolute', right: 0, top: 'calc(100% + 0.5rem)', zIndex: 100 }}>
+                <LanguageModal isOpen={true} onClose={() => setShowLanguageModal(false)} current={language} onChange={(l) => setLanguage(l)} />
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -748,7 +788,7 @@ export default function Navbar() {
       {showLoginModal && (
         <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
       )}
-      <LanguageModal isOpen={showLanguageModal} onClose={() => setShowLanguageModal(false)} current={language} onChange={(l) => setLanguage(l)} />
+      {/* LanguageModal is now rendered as a dropdown above */}
     </nav>
   );
 }
