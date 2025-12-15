@@ -1,12 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { Save, Eye, ArrowLeft } from 'lucide-react';
 import { useFormBuilder } from '@/hooks/useFormBuilder';
 import FieldPalette from '@/components/form-builder/FieldPalette';
 import FormCanvas from '@/components/form-builder/FormCanvas';
 import FieldSettingsPanel from '@/components/form-builder/FieldSettingsPanel';
 import FormPreviewModal from '@/components/form-builder/FormPreviewModal';
+import apiClient from '@/lib/api-client';
 
 export default function FormBuilderPage() {
   const router = useRouter();
@@ -22,6 +24,21 @@ export default function FormBuilderPage() {
     togglePreview,
     updateFormMetadata,
   } = useFormBuilder();
+
+  // Check permissions on load
+  useEffect(() => {
+    const currentUser = apiClient.auth.getUser();
+    if (!currentUser) {
+      router.push('/admin/login');
+      return;
+    }
+    
+    if (currentUser.role !== 'superemployee') {
+      alert('Access denied. Only Super Employees can access the form builder.');
+      router.push('/admin/dashboard');
+      return;
+    }
+  }, [router]);
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">

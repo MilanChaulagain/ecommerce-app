@@ -78,62 +78,74 @@ export default function AuthCallbackPage() {
         // Fetch and log user data
         try {
           const userData = await apiClient.auth.getCurrentUser();
-          
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('👤 USER DATA AFTER LOGIN:');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('📋 Full User Object:', userData);
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('📊 User Details:');
-          console.log('   ID:', userData.id);
-          console.log('   Username:', userData.username);
-          console.log('   Email:', userData.email);
-          console.log('   Role:', userData.role || 'N/A');
-          console.log('   Provider:', provider);
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          
-          // Create a formatted object for easy copying
-          const userSummary = {
-            id: userData.id,
-            username: userData.username,
-            email: userData.email,
-            role: userData.role || 'user',
-            provider: provider,
-            loginTime: new Date().toISOString(),
-            tokens: {
-              access: accessToken.substring(0, 20) + '...',
-              refresh: refreshToken.substring(0, 20) + '...'
+          const role = userData.role || 'customer';
+          // Store user info for all roles
+          localStorage.setItem('user', JSON.stringify(userData));
+          // Send user details and role to parent window, then close popup
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(
+              {
+                type: 'oauth_success',
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                user: userData,
+                role: role
+              },
+              window.location.origin
+            );
+            setStatus('success');
+            setMessage(`Login successful! Closing window...`);
+            setTimeout(() => {
+              window.close();
+            }, 500);
+          } else {
+            // Fallback: show message and redirect as before
+            if (role === 'admin') {
+              localStorage.setItem('admin_user', JSON.stringify(userData));
+              setStatus('success');
+              setMessage(`Successfully logged in as Admin (${userData.username})! Redirecting to admin dashboard...`);
+              setTimeout(() => {
+                window.location.href = '/admin/dashboard';
+              }, 500);
+            } else if (role === 'superemployee' || role === 'employee') {
+              localStorage.setItem('admin_user', JSON.stringify(userData));
+              setStatus('success');
+              setMessage(`Logged in as ${role}. Redirecting to admin dashboard...`);
+              setTimeout(() => {
+                window.location.href = '/admin/dashboard';
+              }, 500);
+            } else {
+              setStatus('success');
+              setMessage('Logged in as customer. Redirecting to home...');
+              setTimeout(() => {
+                window.location.href = '/';
+              }, 1000);
             }
-          };
-          
-          console.log('📦 User Summary (copy this):', JSON.stringify(userSummary, null, 2));
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-          setStatus('success');
-          setMessage(`Successfully logged in as ${userData.username}!`);
+          }
         } catch (userError) {
           console.error('⚠️ Failed to fetch user data:', userError);
-          setStatus('success');
-          setMessage('Login successful! Redirecting...');
+          // Still send success message with tokens, even if user fetch failed
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(
+              {
+                type: 'oauth_success',
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                user: null,
+                role: 'customer'
+              },
+              window.location.origin
+            );
+            setStatus('success');
+            setMessage(`Login successful! Closing window...`);
+            setTimeout(() => {
+              window.close();
+            }, 500);
+          } else {
+            setStatus('error');
+            setMessage('Login failed. Please try again.');
+          }
         }
-
-        
-        // Try to notify opener window first
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(
-            { 
-              type: 'oauth_success',
-              accessToken: accessToken,
-              refreshToken: refreshToken 
-            },
-            window.location.origin
-          );
-        }
-        
-        // Close this window/tab immediately (works for both popup and tab)
-        setTimeout(() => {
-          window.close();
-        }, 100);
       } else {
         setStatus('error');
         setMessage('Missing authentication tokens.');

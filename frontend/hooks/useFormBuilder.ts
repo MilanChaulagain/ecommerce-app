@@ -27,7 +27,7 @@ export function useFormBuilder() {
     showPreview: false,
     languageConfig: {
       primary: 'en',
-      optional: [],
+      optional: ['nep'],
     },
     relationships: [],
     currentLanguage: 'en',
@@ -147,6 +147,19 @@ export function useFormBuilder() {
 
     if (state.fields.length === 0) {
       alert('Please add at least one field');
+      return;
+    }
+
+    // Check user permissions
+    const currentUser = apiClient.auth.getUser();
+    if (!currentUser) {
+      alert('You must be logged in to save forms');
+      return;
+    }
+
+    if (currentUser.role !== 'superemployee') {
+      console.log(currentUser.role)
+      alert('You do not have permission to create or edit forms. Only Super Employees can manage forms.');
       return;
     }
 

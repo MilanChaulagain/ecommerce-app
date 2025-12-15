@@ -147,7 +147,7 @@ export default function Navbar() {
         {/* Logo and Brand */}
         <div className="flex items-center" style={{ gap: theme.spacing.sm }}>
           <div style={logoStyle}>
-            <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: theme.components.navbar.logo.borderRadius }} />
+            <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: theme.components.navbar.logo.borderRadius }} loading="eager" />
           </div>
           <span 
             style={{
@@ -415,7 +415,7 @@ export default function Navbar() {
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
               overflow: 'hidden',
             }}>
-              <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: '50%' }} />
+              <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: '50%' }} loading="eager" />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
               <span style={{

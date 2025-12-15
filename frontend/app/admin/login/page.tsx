@@ -20,29 +20,50 @@ export default function AdminLogin() {
 
     try {
       // Use centralized API client for login
-      // Note: Backend needs to implement /api/users/login/ endpoint
       const response = await apiClient.auth.login(email, password);
-      
-      // Check if user has admin/employee role
-      if (!['admin', 'superemployee', 'employee'].includes(response.user.role)) {
-        setError('Access denied. Admin privileges required.');
+      console.log(response.user.role)
+
+      // Role-based access check
+      const allowedRoles = ['admin', 'superemployee', 'employee'];
+      if (!allowedRoles.includes(response.user.role)) {
+        setError('Access denied. Only admin, superemployee, or employee can access the admin dashboard.');
         apiClient.auth.logout();
         setLoading(false);
         return;
       }
 
-      // Redirect to dashboard
-      router.push('/admin/dashboard');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('admin_token', response.access);
+        localStorage.setItem('admin_user', JSON.stringify(response.user));
+      }
+
+      // Debug: Confirm allowed role and navigation
+      console.log('Allowed role, navigating to dashboard:', response.user.role);
+        localStorage.setItem('admin_user', JSON.stringify(response.user));
+        router.push('/admin/dashboard');
     } catch (error: any) {
-      console.error('Login error:', error);
-      const errorMessage = error?.data?.detail || error?.data?.error || error.message;
-      
-      if (error.status === 401) {
+      let errorMessage = 'Login failed. Please try again.';
+      if (error?.data) {
+        if (error.data.detail) errorMessage = error.data.detail;
+        else if (error.data.error) errorMessage = error.data.error;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      if (error?.status === 401) {
         setError('Invalid email or password.');
-      } else if (error.message.includes('fetch')) {
-        setError('Network error. Please check if the backend is running on port 8000.');
+      } else if (errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('fetch')) {
+        setError('Network error: Backend unreachable or CORS issue. Ensure http://localhost:8000 is running and accessible.');
       } else {
-        setError(errorMessage || 'Login failed. Please try again.');
+        setError(errorMessage);
+      }
+
+      // Log error details for debugging
+      console.error('Login error details:', error);
+      if (error?.response) {
+        error.response.text().then((text: string) => {
+          console.error('API response:', text);
+        });
       }
       setLoading(false);
     }
@@ -126,7 +147,15 @@ export default function AdminLogin() {
               disabled={loading}
               className="w-full py-2 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium rounded-md hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? (
+                <span>
+                  <svg className="animate-spin inline-block w-4 h-4 mr-2 text-white" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  Signing in...
+                </span>
+              ) : 'Sign In'}
             </button>
           </form>
 

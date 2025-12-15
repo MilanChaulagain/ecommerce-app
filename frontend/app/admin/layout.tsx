@@ -12,7 +12,8 @@ import {
   X,
   ChevronRight,
   FileText,
-  BarChart3
+  BarChart3,
+  Home
 } from 'lucide-react';
 
 export default function AdminLayout({
@@ -42,7 +43,15 @@ export default function AdminLayout({
       return;
     }
 
-    setUser(JSON.parse(userData));
+    const parsedUser = JSON.parse(userData);
+    const allowedRoles = ['admin', 'superemployee'];
+    if (!allowedRoles.includes(parsedUser.role)) {
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      router.push('/admin/login');
+      return;
+    }
+    setUser(parsedUser);
     setIsLoading(false);
   }, [router, pathname]);
 
@@ -95,6 +104,13 @@ export default function AdminLayout({
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.push('/')}
+              className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+              title="Go to Landing Page"
+            >
+              <Home className="w-4 h-4" />
+            </button>
             <div className="text-right hidden sm:block">
               <div className="text-xs font-medium text-gray-900">{user.name || user.email}</div>
               <div className="text-xs text-gray-500">{user.user_type}</div>

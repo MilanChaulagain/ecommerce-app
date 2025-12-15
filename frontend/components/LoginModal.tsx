@@ -86,7 +86,19 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
-  // No justOpened logic needed
+  // Store the original page when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      // Only set if not already set (first login attempt)
+      if (!sessionStorage.getItem('login_original_path')) {
+        sessionStorage.setItem('login_original_path', window.location.pathname + window.location.search);
+      }
+    }
+    // Clean up on close
+    if (!isOpen) {
+      sessionStorage.removeItem('login_original_path');
+    }
+  }, [isOpen]);
 
   // Listen for OAuth success messages from popup
   useEffect(() => {
@@ -103,19 +115,46 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
         if (event.data.refreshToken) {
           localStorage.setItem('refresh_token', event.data.refreshToken);
         }
-        
-        // Close modal and stay on same page
         setIsLoading(null);
         onClose();
-        
         // Dispatch custom event for components to react to login
         window.dispatchEvent(new CustomEvent('userLoggedIn', { 
           detail: { accessToken: event.data.accessToken } 
         }));
+        const originalPath = sessionStorage.getItem('login_original_path');
+        // If this is a popup, tell parent to redirect and close self
+        if (window.opener && window.opener !== window) {
+          if (originalPath) {
+            window.opener.postMessage({ type: 'redirect_after_login', path: originalPath }, window.location.origin);
+          }
+          sessionStorage.removeItem('login_original_path');
+          window.close();
+        } else {
+          // Not a popup, redirect in this window if needed
+          if (originalPath && window.location.pathname + window.location.search !== originalPath) {
+            sessionStorage.removeItem('login_original_path');
+            window.location.href = originalPath;
+          } else {
+            sessionStorage.removeItem('login_original_path');
+          }
+        }
       } else if (event.data.type === 'oauth_error') {
         setIsLoading(null);
         setError(event.data.message || 'Authentication failed');
       }
+      // Listen for redirect message from popup (if this is the main window)
+      useEffect(() => {
+        const handleRedirectAfterLogin = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return;
+          if (event.data.type === 'redirect_after_login' && event.data.path) {
+            if (window.location.pathname + window.location.search !== event.data.path) {
+              window.location.href = event.data.path;
+            }
+          }
+        };
+        window.addEventListener('message', handleRedirectAfterLogin);
+        return () => window.removeEventListener('message', handleRedirectAfterLogin);
+      }, []);
     };
 
     window.addEventListener('message', handleMessage);

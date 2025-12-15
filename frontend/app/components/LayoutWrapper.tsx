@@ -8,6 +8,7 @@ import BottomNavigation from "@/components/BottomNavigation";
 // Define the paths where the navigation components should NOT appear
 const excludedPaths = [
   '/search', // Assuming your search page route is /search
+  '/admin', // Hide navigation for all admin pages
   // Add other routes here if needed, e.g., '/login', '/checkout'
 ];
 
