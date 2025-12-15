@@ -121,6 +121,16 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
         window.dispatchEvent(new CustomEvent('userLoggedIn', { 
           detail: { accessToken: event.data.accessToken } 
         }));
+        // Try to close the popup that sent this message (if possible)
+        try {
+          if (event.source && typeof (event.source as Window).close === 'function') {
+            (event.source as Window).close();
+          } else if (event.source && typeof (event.source as Window).postMessage === 'function') {
+            (event.source as Window).postMessage({ type: 'close_popup' }, event.origin);
+          }
+        } catch (err) {
+          console.warn('Could not close popup programmatically:', err);
+        }
         const originalPath = sessionStorage.getItem('login_original_path');
         // If this is a popup, tell parent to redirect and close self
         if (window.opener && window.opener !== window) {
@@ -142,24 +152,34 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
         setIsLoading(null);
         setError(event.data.message || 'Authentication failed');
       }
-      // Listen for redirect message from popup (if this is the main window)
-      useEffect(() => {
-        const handleRedirectAfterLogin = (event: MessageEvent) => {
-          if (event.origin !== window.location.origin) return;
-          if (event.data.type === 'redirect_after_login' && event.data.path) {
-            if (window.location.pathname + window.location.search !== event.data.path) {
-              window.location.href = event.data.path;
-            }
-          }
-        };
-        window.addEventListener('message', handleRedirectAfterLogin);
-        return () => window.removeEventListener('message', handleRedirectAfterLogin);
-      }, []);
+      // end handleMessage
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [onClose]);
+
+  // Listen for redirect message from popup (if this is the main window)
+  useEffect(() => {
+    const handleRedirectAfterLogin = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data.type === 'redirect_after_login' && event.data.path) {
+        if (window.location.pathname + window.location.search !== event.data.path) {
+          window.location.href = event.data.path;
+        }
+      }
+      // Allow popup to request close
+      if (event.data.type === 'close_popup') {
+        try {
+          window.close();
+        } catch (err) {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('message', handleRedirectAfterLogin);
+    return () => window.removeEventListener('message', handleRedirectAfterLogin);
+  }, []);
 
   // No justOpened logic needed
 
@@ -307,18 +327,33 @@ export default function LoginModal({ isOpen, onClose, buttonRef }: LoginModalPro
   // Monitor popup closure and handle callbacks
   const monitorPopup = (popup: Window) => {
     const checkInterval = setInterval(() => {
+      // If popup closed, or token appears in storage, finish
+      const token = localStorage.getItem('admin_token');
+      if (token) {
+        // close popup if still open
+        try {
+          if (!popup.closed) popup.close();
+        } catch (err) {
+          // ignore
+        }
+        clearInterval(checkInterval);
+        setIsLoading(null);
+        onClose();
+        // Dispatch custom event for components to react to login
+        window.dispatchEvent(new CustomEvent('userLoggedIn', { 
+          detail: { accessToken: token } 
+        }));
+        return;
+      }
+
       if (popup.closed) {
         clearInterval(checkInterval);
         setIsLoading(null);
-        
-        // Check if authentication was successful by checking localStorage
-        const token = localStorage.getItem('admin_token');
-        if (token) {
+        // If popup closed, check if authentication was successful
+        const tokenAfterClose = localStorage.getItem('admin_token');
+        if (tokenAfterClose) {
           onClose();
-          // Dispatch custom event for components to react to login
-          window.dispatchEvent(new CustomEvent('userLoggedIn', { 
-            detail: { accessToken: token } 
-          }));
+          window.dispatchEvent(new CustomEvent('userLoggedIn', { detail: { accessToken: tokenAfterClose } }));
         }
       }
     }, 500);

@@ -28,8 +28,8 @@ export default function AdminLayout({
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Skip auth check for login page
-    if (pathname === '/admin/login') {
+    // Skip auth check for login page or the admin root
+    if (pathname === '/admin/login' || pathname === '/admin') {
       setIsLoading(false);
       return;
     }
@@ -38,7 +38,13 @@ export default function AdminLayout({
     const token = localStorage.getItem('admin_token');
     const userData = localStorage.getItem('admin_user');
 
+    // If no token or user data, allow the dashboard page to handle unauthenticated
+    // access itself so it can show a modal instead of redirecting immediately.
     if (!token || !userData) {
+      if (pathname === '/admin/dashboard') {
+        setIsLoading(false);
+        return;
+      }
       router.push('/admin/login');
       return;
     }
@@ -46,6 +52,11 @@ export default function AdminLayout({
     const parsedUser = JSON.parse(userData);
     const allowedRoles = ['admin', 'superemployee'];
     if (!allowedRoles.includes(parsedUser.role)) {
+      // If visiting dashboard, allow the page to show its own not-authenticated modal
+      if (pathname === '/admin/dashboard') {
+        setIsLoading(false);
+        return;
+      }
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
       router.push('/admin/login');
@@ -71,11 +82,11 @@ export default function AdminLayout({
   ];
 
   // Show login page without layout
-  if (pathname === '/admin/login') {
+  if (pathname === '/admin/login' || pathname === '/admin') {
     return <>{children}</>;
   }
 
-  if (isLoading || !user) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-sm text-gray-500">Loading...</div>
@@ -111,10 +122,16 @@ export default function AdminLayout({
             >
               <Home className="w-4 h-4" />
             </button>
-            <div className="text-right hidden sm:block">
-              <div className="text-xs font-medium text-gray-900">{user.name || user.email}</div>
-              <div className="text-xs text-gray-500">{user.user_type}</div>
-            </div>
+            {user ? (
+              <div className="text-right hidden sm:block">
+                <div className="text-xs font-medium text-gray-900">{user.name || user.email}</div>
+                <div className="text-xs text-gray-500">{user.user_type}</div>
+              </div>
+            ) : (
+              <div className="text-right hidden sm:block">
+                <div className="text-xs font-medium text-gray-900">Not signed in</div>
+              </div>
+            )}
             <button
               onClick={handleLogout}
               className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"

@@ -19,14 +19,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userName, 
         </div>
         <div className="font-semibold text-gray-800 mb-1 text-center" style={{wordBreak:'break-all'}}>{userName}</div>
         <div className="text-xs text-gray-500 mb-4 text-center">Welcome back!</div>
-        {isAdmin && onDashboard && (
+        {/* {isAdmin && onDashboard && (
           <button
             className="w-full py-2 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium mb-2"
             onClick={onDashboard}
           >
             Dashboard
           </button>
-        )}
+        )} */}
         <button
           className="w-full py-2 rounded bg-red-500 hover:bg-red-600 text-white font-medium mb-2"
           onClick={onLogout}

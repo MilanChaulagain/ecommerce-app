@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Search, ShoppingCart, Menu, X, User, Facebook, Instagram, Music, LogOut, Bell, TrendingUp } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, User, Facebook, Instagram, Music, LogOut, Bell, TrendingUp, Globe } from 'lucide-react';
 import LoginModal from './LoginModal';
 import ProfileModal from './ProfileModal';
+import LanguageModal from './LanguageModal';
 import { useTheme, createGradient } from '@/hooks/useTheme';
 import apiClient from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
@@ -17,6 +18,8 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [language, setLanguage] = useState('en');
   const loginModalRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const theme = useTheme();
@@ -63,6 +66,10 @@ export default function Navbar() {
 
     checkLoginStatus();
 
+    // read language from localStorage
+    const storedLang = typeof window !== 'undefined' ? localStorage.getItem('lang') : null;
+    if (storedLang) setLanguage(storedLang);
+
     // Listen for login event (from popup)
     const handleUserLoggedIn = () => {
       setIsLoggedIn(true);
@@ -92,9 +99,15 @@ export default function Navbar() {
 
     window.addEventListener('userLoggedIn', handleUserLoggedIn);
     window.addEventListener('storage', handleStorage);
+    const handleLangChange = () => {
+      const l = localStorage.getItem('lang');
+      if (l) setLanguage(l);
+    };
+    window.addEventListener('languageChanged', handleLangChange);
     return () => {
       window.removeEventListener('userLoggedIn', handleUserLoggedIn);
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('languageChanged', handleLangChange);
     };
   }, []);
 
@@ -156,7 +169,7 @@ export default function Navbar() {
       {/* Desktop Navigation */}
       <div className="hidden md:flex items-center justify-between w-full max-w-7xl mx-auto px-4" style={{ height: theme.components.navbar.height.desktop }}>
         {/* Logo and Brand */}
-        <div className="flex items-center" style={{ gap: theme.spacing.sm }}>
+        <div className="flex items-center" style={{ gap: theme.spacing.sm, cursor: 'pointer' }} onClick={() => router.push('/') }>
           <div style={logoStyle}>
             <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: theme.components.navbar.logo.borderRadius }} loading="eager" />
           </div>
@@ -177,8 +190,8 @@ export default function Navbar() {
           </span>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex-1" style={{ maxWidth: theme.components.navbar.searchBar.maxWidth, marginLeft: theme.spacing.lg, marginRight: theme.spacing.lg }}>
+        {/* Search Bar (narrower) */}
+        <div className="flex-1" style={{ maxWidth: '28rem', marginLeft: theme.spacing.lg, marginRight: theme.spacing.lg }}>
           <div style={{ position: 'relative' }}>
             <Search 
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
@@ -193,7 +206,7 @@ export default function Navbar() {
               style={{
                 width: '100%',
                 paddingLeft: '2.5rem',
-                paddingRight: '1rem',
+                paddingRight: '0.75rem',
                 paddingTop: theme.components.navbar.searchBar.paddingY,
                 paddingBottom: theme.components.navbar.searchBar.paddingY,
                 borderWidth: '1px',
@@ -207,6 +220,17 @@ export default function Navbar() {
               readOnly
             />
           </div>
+        </div>
+
+        {/* Quick Links (desktop) */}
+        <div className="hidden lg:flex items-center" style={{ gap: theme.spacing.sm }}>
+          <button onClick={() => router.push('/categories')} className="text-sm text-gray-700 hover:text-blue-600">Categories</button>
+          <button onClick={() => router.push('/cart')} className="text-sm text-gray-700 hover:text-blue-600">Cart</button>
+          <button onClick={() => router.push('/flash-sales')} className="text-sm text-gray-700 hover:text-blue-600">Flash Sales</button>
+          <button onClick={() => router.push('/promotions')} className="text-sm text-gray-700 hover:text-blue-600">Promotions</button>
+          <button onClick={() => setShowLanguageModal(true)} className="text-sm text-gray-700 hover:text-blue-600 flex items-center gap-2">
+            <Globe className="w-4 h-4" /> {language === 'ne' ? 'ने' : 'EN'}
+          </button>
         </div>
 
         {/* Action Buttons */}
@@ -462,9 +486,9 @@ export default function Navbar() {
         paddingBottom: '1rem',
       }}>
         {/* Top Row - Logo, Notification, Cart, Login */}
-        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center justify-between px-4 py-3">
           {/* Logo and Brand */}
-          <div className="flex items-center" style={{ gap: '8px' }}>
+          <div className="flex items-center" style={{ gap: '8px', cursor: 'pointer' }} onClick={() => router.push('/') }>
             <div style={{
               width: '40px',
               height: '40px',
@@ -499,6 +523,13 @@ export default function Navbar() {
 
           {/* Action Icons */}
           <div className="flex items-center" style={{ gap: '12px' }}>
+            {/* Mobile menu toggle */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              style={{ padding: '8px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.12)', border: 'none', cursor: 'pointer' }}
+            >
+              {showMobileMenu ? <X style={{ width: 18, height: 18, color: 'white' }} /> : <Menu style={{ width: 18, height: 18, color: 'white' }} />}
+            </button>
             {/* Notification Bell */}
             <button 
               style={{
@@ -631,17 +662,17 @@ export default function Navbar() {
           <div style={{
             position: 'relative',
             backgroundColor: 'white',
-            borderRadius: '24px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
+            borderRadius: '20px',
+            boxShadow: '0 3px 8px rgba(0, 0, 0, 0.06)',
             display: 'flex',
             alignItems: 'center',
             overflow: 'hidden',
           }}>
             <Search style={{
               position: 'absolute',
-              left: '16px',
-              width: '18px',
-              height: '18px',
+              left: '12px',
+              width: '16px',
+              height: '16px',
               color: '#9CA3AF',
               strokeWidth: 2,
             }} />
@@ -650,10 +681,10 @@ export default function Navbar() {
               placeholder="Search products, brands, stores..."
               style={{
                 width: '100%',
-                paddingLeft: '44px',
-                paddingRight: '80px',
-                paddingTop: '12px',
-                paddingBottom: '12px',
+                paddingLeft: '40px',
+                paddingRight: '64px',
+                paddingTop: '8px',
+                paddingBottom: '8px',
                 border: 'none',
                 outline: 'none',
                 fontSize: '0.875rem',
@@ -665,13 +696,13 @@ export default function Navbar() {
             />
             <button style={{
               position: 'absolute',
-              right: '4px',
-              padding: '8px 16px',
+              right: '6px',
+              padding: '6px 12px',
               backgroundColor: '#FF6B8A',
               border: 'none',
-              borderRadius: '20px',
+              borderRadius: '16px',
               color: 'white',
-              fontSize: '0.875rem',
+              fontSize: '0.825rem',
               fontWeight: '600',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -704,15 +735,11 @@ export default function Navbar() {
             className="px-4 py-3"
             style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md }}
           >
-            {/* Future: Navigation menu items, categories, etc. */}
-            <div style={{ 
-              padding: '1rem',
-              textAlign: 'center',
-              color: theme.colors.neutral[500],
-              fontSize: '0.875rem',
-            }}>
-              Menu items will be added here
-            </div>
+            <button onClick={() => { router.push('/categories'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Categories</button>
+            <button onClick={() => { router.push('/cart'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Cart</button>
+            <button onClick={() => { router.push('/flash-sales'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Flash Sales</button>
+            <button onClick={() => { router.push('/promotions'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Promotions</button>
+            <button onClick={() => { setShowLanguageModal(true); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Change Language</button>
           </div>
         </div>
       )}
@@ -721,6 +748,7 @@ export default function Navbar() {
       {showLoginModal && (
         <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
       )}
+      <LanguageModal isOpen={showLanguageModal} onClose={() => setShowLanguageModal(false)} current={language} onChange={(l) => setLanguage(l)} />
     </nav>
   );
 }

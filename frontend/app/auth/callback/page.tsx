@@ -26,11 +26,11 @@ export default function AuthCallbackPage() {
         setStatus('error');
         setMessage(searchParams.get('message') || 'Authentication failed. Please try again.');
         
-        if (window.opener) {
-          window.opener.postMessage(
-            { type: 'oauth_error', message: error },
-            window.location.origin
-          );
+        let openerAvailable = false;
+        try { openerAvailable = !!window.opener && !window.opener.closed; } catch (e) { openerAvailable = false; }
+        if (openerAvailable) {
+          // Use wildcard origin so the message reaches the opener regardless of origin differences
+          window.opener.postMessage({ type: 'oauth_error', message: error }, '*');
           setTimeout(() => window.close(), 3000);
         } else {
           setTimeout(() => router.push('/'), 3000);
@@ -82,17 +82,17 @@ export default function AuthCallbackPage() {
           // Store user info for all roles
           localStorage.setItem('user', JSON.stringify(userData));
           // Send user details and role to parent window, then close popup
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage(
-              {
-                type: 'oauth_success',
-                accessToken: accessToken,
-                refreshToken: refreshToken,
-                user: userData,
-                role: role
-              },
-              window.location.origin
-            );
+          let openerAvailable = false;
+          try { openerAvailable = !!window.opener && !window.opener.closed; } catch (e) { openerAvailable = false; }
+          if (openerAvailable) {
+            // Use wildcard origin so the message reaches the opener regardless of origin differences
+            window.opener.postMessage({
+              type: 'oauth_success',
+              accessToken: accessToken,
+              refreshToken: refreshToken,
+              user: userData,
+              role: role
+            }, '*');
             setStatus('success');
             setMessage(`Login successful! Closing window...`);
             setTimeout(() => {
@@ -125,17 +125,16 @@ export default function AuthCallbackPage() {
         } catch (userError) {
           console.error('⚠️ Failed to fetch user data:', userError);
           // Still send success message with tokens, even if user fetch failed
-          if (window.opener && !window.opener.closed) {
-            window.opener.postMessage(
-              {
-                type: 'oauth_success',
-                accessToken: accessToken,
-                refreshToken: refreshToken,
-                user: null,
-                role: 'customer'
-              },
-              window.location.origin
-            );
+          let openerAvailable = false;
+          try { openerAvailable = !!window.opener && !window.opener.closed; } catch (e) { openerAvailable = false; }
+          if (openerAvailable) {
+            window.opener.postMessage({
+              type: 'oauth_success',
+              accessToken: accessToken,
+              refreshToken: refreshToken,
+              user: null,
+              role: 'customer'
+            }, '*');
             setStatus('success');
             setMessage(`Login successful! Closing window...`);
             setTimeout(() => {
@@ -150,11 +149,10 @@ export default function AuthCallbackPage() {
         setStatus('error');
         setMessage('Missing authentication tokens.');
         
-        if (window.opener) {
-          window.opener.postMessage(
-            { type: 'oauth_error', message: 'Missing tokens' },
-            window.location.origin
-          );
+        let openerAvailable = false;
+        try { openerAvailable = !!window.opener && !window.opener.closed; } catch (e) { openerAvailable = false; }
+        if (openerAvailable) {
+          window.opener.postMessage({ type: 'oauth_error', message: 'Missing tokens' }, '*');
           setTimeout(() => window.close(), 3000);
         } else {
           setTimeout(() => router.push('/'), 3000);
@@ -164,6 +162,21 @@ export default function AuthCallbackPage() {
 
     handleCallback();
   }, [searchParams, router]);
+
+  // Listen for close requests from the opener
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      try {
+        if (e?.data?.type === 'close_popup') {
+          window.close();
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50">

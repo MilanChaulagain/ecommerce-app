@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { FileText, Users, TrendingUp, Clock, Plus, Edit, Trash2, Eye } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import apiClient, { FormSchema } from '@/lib/api-client';
+import NotAuthenticatedModal from '@/components/NotAuthenticatedModal';
 import FormViewModal from '@/components/FormViewModal';
 
 export default function AdminDashboard() {
@@ -16,8 +17,28 @@ export default function AdminDashboard() {
   });
   const [recentForms, setRecentForms] = useState<any[]>([]);
   const [previewForm, setPreviewForm] = useState<FormSchema | null>(null);
+  const [notAuth, setNotAuth] = useState(false);
 
   useEffect(() => {
+    // If user is not authenticated, show a modal instead of fetching data
+    const isAuth = apiClient.auth.isAuthenticated();
+    const storedAdminToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    const currentUser = apiClient.auth.getUser();
+    // If TokenManager has no user but admin_user exists in localStorage, use that
+    const storedAdminUser = typeof window !== 'undefined' ? localStorage.getItem('admin_user') : null;
+    const storedUser = !currentUser && storedAdminUser ? JSON.parse(storedAdminUser) : currentUser;
+    const allowedRoles = ['admin', 'superemployee'];
+
+    if (!isAuth && !storedAdminToken) {
+      setNotAuth(true);
+      return;
+    }
+
+    if (storedUser && !allowedRoles.includes(storedUser.role)) {
+      setNotAuth(true);
+      return;
+    }
+
     fetchDashboardData();
   }, []);
 
@@ -42,9 +63,10 @@ export default function AdminDashboard() {
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
       
-      // If unauthorized, redirect to login
-      if (error.status === 401) {
-        router.push('/admin/login');
+      // If unauthorized, show not-authenticated modal
+      if (error?.status === 401) {
+        setNotAuth(true);
+        return;
       }
     }
   };
@@ -212,6 +234,7 @@ export default function AdminDashboard() {
 
         {/* Form Preview Modal */}
         <FormViewModal form={previewForm} onClose={() => setPreviewForm(null)} />
+        <NotAuthenticatedModal isOpen={notAuth} onClose={() => setNotAuth(false)} />
       </div>
     </div>
   );
