@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { Search, ShoppingCart, Menu, X, User, Facebook, Instagram, Music, LogOut, Bell } from 'lucide-react';
+import { Search, ShoppingCart, Menu, X, User, Facebook, Instagram, Music, LogOut, Bell, TrendingUp } from 'lucide-react';
 import LoginModal from './LoginModal';
 import ProfileModal from './ProfileModal';
 import { useTheme, createGradient } from '@/hooks/useTheme';
@@ -14,6 +14,7 @@ export default function Navbar() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState<string>('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const loginModalRef = useRef<HTMLDivElement>(null);
@@ -30,11 +31,17 @@ export default function Navbar() {
         setIsLoggedIn(true);
         if (cachedUserName) {
           setUserName(cachedUserName);
+          // Try to read stored user to determine admin role without extra network request
+          const storedUser = apiClient.auth.getUser?.();
+          if (storedUser && storedUser.role) {
+            setIsAdmin(storedUser.role === 'admin' || storedUser.role === 'superemployee');
+          }
         } else {
           // Fetch user data only if not cached
           apiClient.auth.getCurrentUser().then(user => {
             setUserName(user.username);
             localStorage.setItem('admin_username', user.username);
+            setIsAdmin(user.role === 'admin' || user.role === 'superemployee');
           }).catch(() => {
             // If token is invalid, clear it
             localStorage.removeItem('admin_token');
@@ -43,12 +50,14 @@ export default function Navbar() {
             localStorage.removeItem('admin_username');
             setIsLoggedIn(false);
             setUserName('');
+            setIsAdmin(false);
           });
         }
       } else {
         setIsLoggedIn(false);
         setUserName('');
         localStorage.removeItem('admin_username');
+        setIsAdmin(false);
       }
     };
 
@@ -60,6 +69,7 @@ export default function Navbar() {
       apiClient.auth.getCurrentUser().then(user => {
         setUserName(user.username);
         localStorage.setItem('admin_username', user.username);
+        setIsAdmin(user.role === 'admin' || user.role === 'superemployee');
         console.log(`Welcome, ${user.username}! 🎉`);
       }).catch(err => {
         console.error('Failed to fetch user:', err);
@@ -96,6 +106,7 @@ export default function Navbar() {
     localStorage.removeItem('admin_username');
     setIsLoggedIn(false);
     setUserName('');
+    setIsAdmin(false);
     setShowUserMenu(false);
     setShowProfileModal(false);
     // No full page reload
@@ -200,6 +211,32 @@ export default function Navbar() {
 
         {/* Action Buttons */}
         <div className="flex items-center" style={{ gap: theme.spacing.md }}>
+          {/* Dashboard (admin only) */}
+          {isLoggedIn && isAdmin && (
+            <button
+              onClick={() => router.push('/admin/dashboard')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.xs,
+                paddingLeft: theme.components.navbar.buttons.login.paddingX,
+                paddingRight: theme.components.navbar.buttons.login.paddingX,
+                paddingTop: theme.components.navbar.buttons.login.paddingY,
+                paddingBottom: theme.components.navbar.buttons.login.paddingY,
+                border: 'none',
+                borderRadius: theme.components.navbar.buttons.login.borderRadius,
+                fontSize: theme.components.navbar.buttons.login.fontSize,
+                background: 'transparent',
+                color: theme.colors.primary,
+                cursor: 'pointer',
+                transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              <span>Dashboard</span>
+            </button>
+          )}
           {/* Login Button / User Profile */}
           <div style={{ position: 'relative' }} ref={loginModalRef}>
             {!isLoggedIn ? (
@@ -326,6 +363,30 @@ export default function Navbar() {
                         Welcome back!
                       </div>
                     </div>
+                    {isAdmin && (
+                      <button
+                        onClick={() => { router.push('/admin/dashboard'); setShowUserMenu(false); }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: theme.spacing.xs,
+                          padding: theme.spacing.md,
+                          border: 'none',
+                          backgroundColor: 'transparent',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          color: theme.colors.primary,
+                          transition: 'background-color 0.2s',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.neutral[50]}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <TrendingUp style={{ width: '16px', height: '16px' }} />
+                        <span>Dashboard</span>
+                      </button>
+                    )}
                     <button
                       onClick={handleLogout}
                       style={{
@@ -624,7 +685,7 @@ export default function Navbar() {
           {/* ProfileModal below search bar in mobile view */}
           {showProfileModal && (
             <div className="md:hidden" style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 8px)', zIndex: 50, display: 'flex', justifyContent: 'center' }}>
-              <ProfileModal isOpen={true} onClose={() => setShowProfileModal(false)} userName={userName} onLogout={handleLogout} />
+              <ProfileModal isOpen={true} onClose={() => setShowProfileModal(false)} userName={userName} onLogout={handleLogout} isAdmin={isAdmin} onDashboard={() => { setShowProfileModal(false); router.push('/admin/dashboard'); }} />
             </div>
           )}
         </div>
