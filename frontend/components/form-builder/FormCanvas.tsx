@@ -83,6 +83,20 @@ const SortableField = ({
             )}
           </div>
         );
+      case 'image':
+        return (
+          <div className="flex flex-col gap-1">
+            <input type="file" accept={field.accept || 'image/*'} disabled className="block w-full text-xs text-gray-700 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700" />
+            <span className="text-[10px] text-gray-400">Image upload (preview only)</span>
+          </div>
+        );
+      case 'video':
+        return (
+          <div className="flex flex-col gap-1">
+            <input type="file" accept={field.accept || 'video/*'} disabled className="block w-full text-xs text-gray-700 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700" />
+            <span className="text-[10px] text-gray-400">Video upload (preview only)</span>
+          </div>
+        );
       default:
         return <input type={field.type} className={baseClasses} placeholder={field.placeholder} disabled />;
     }

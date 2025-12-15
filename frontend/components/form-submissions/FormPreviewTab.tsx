@@ -14,7 +14,7 @@ interface FormPreviewTabProps {
 type SubmissionStatus = 'idle' | 'submitting' | 'success' | 'error';
 
 export default function FormPreviewTab({ form, onSubmitSuccess }: FormPreviewTabProps) {
-  const [formData, setFormData] = useState<Record<string, string | number | boolean>>({});
+  const [formData, setFormData] = useState<Record<string, string | number | boolean | File | File[] | undefined>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<SubmissionStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -22,7 +22,7 @@ export default function FormPreviewTab({ form, onSubmitSuccess }: FormPreviewTab
   const baseClasses = "w-full px-2 py-1.5 border border-gray-300 rounded text-xs text-gray-900 focus:ring-1 focus:ring-blue-500 focus:border-blue-500";
   const errorClasses = "w-full px-2 py-1.5 border border-red-300 rounded text-xs text-gray-900 focus:ring-1 focus:ring-red-500 focus:border-red-500 bg-red-50";
 
-  const handleInputChange = (fieldId: string, value: string | number | boolean) => {
+  const handleInputChange = (fieldId: string, value: string | number | boolean | File | File[] | undefined) => {
     setFormData(prev => ({ ...prev, [fieldId]: value }));
     if (errors[fieldId]) {
       setErrors(prev => {
@@ -31,6 +31,19 @@ export default function FormPreviewTab({ form, onSubmitSuccess }: FormPreviewTab
         return newErrors;
       });
     }
+  };
+
+  // Remove a file from a multiple file field
+  const handleRemoveFile = (fieldId: string, index: number) => {
+    setFormData(prev => {
+      const files = prev[fieldId];
+      if (Array.isArray(files)) {
+        const newFiles = files.slice();
+        newFiles.splice(index, 1);
+        return { ...prev, [fieldId]: newFiles };
+      }
+      return prev;
+    });
   };
 
   const validateForm = (): boolean => {
@@ -163,7 +176,6 @@ export default function FormPreviewTab({ form, onSubmitSuccess }: FormPreviewTab
           const field = fromBackendFieldStructure(backendField, form.language_config.primary);
           const hasError = !!errors[field.id];
           const fieldClasses = hasError ? errorClasses : baseClasses;
-          
           return (
             <div key={field.id} className="form-group">
               {field.type !== 'checkbox' && (
@@ -172,7 +184,93 @@ export default function FormPreviewTab({ form, onSubmitSuccess }: FormPreviewTab
                   {field.required && <span className="text-red-500 ml-1">*</span>}
                 </label>
               )}
-              {field.type === 'textarea' ? (
+              {field.type === 'image' ? (
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="file"
+                    accept={field.accept || 'image/*'}
+                    className={fieldClasses}
+                    required={field.required}
+                    multiple={field.allowMultiple}
+                    onChange={e => {
+                      const files = e.target.files;
+                      if (field.allowMultiple) {
+                        handleInputChange(field.id, files ? Array.from(files) : []);
+                      } else {
+                        const file = files && files[0] ? files[0] : undefined;
+                        handleInputChange(field.id, file);
+                      }
+                    }}
+                  />
+                  {/* Preview for multiple or single */}
+                  {field.allowMultiple && Array.isArray(formData[field.id]) && (formData[field.id] as File[]).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(formData[field.id] as File[]).map((file, idx) => (
+                        <div key={idx} className="relative group">
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={`Preview ${idx+1}`}
+                            className="max-h-24 rounded border border-gray-200 object-contain"
+                          />
+                          <button type="button" onClick={() => handleRemoveFile(field.id, idx)} className="absolute top-0 right-0 bg-white/80 text-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!field.allowMultiple && formData[field.id] instanceof File && (
+                    <img
+                      src={URL.createObjectURL(formData[field.id] as File)}
+                      alt="Preview"
+                      className="mt-2 max-h-32 rounded border border-gray-200 object-contain"
+                    />
+                  )}
+                </div>
+              ) : field.type === 'video' ? (
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="file"
+                    accept={field.accept || 'video/*'}
+                    className={fieldClasses}
+                    required={field.required}
+                    multiple={field.allowMultiple}
+                    onChange={e => {
+                      const files = e.target.files;
+                      if (field.allowMultiple) {
+                        handleInputChange(field.id, files ? Array.from(files) : []);
+                      } else {
+                        const file = files && files[0] ? files[0] : undefined;
+                        handleInputChange(field.id, file);
+                      }
+                    }}
+                  />
+                  {/* Preview for multiple or single */}
+                  {field.allowMultiple && Array.isArray(formData[field.id]) && (formData[field.id] as File[]).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {(formData[field.id] as File[]).map((file, idx) => (
+                        <div key={idx} className="relative group">
+                          <video
+                            src={URL.createObjectURL(file)}
+                            controls
+                            className="max-h-32 rounded border border-gray-200 object-contain"
+                          />
+                          <button type="button" onClick={() => handleRemoveFile(field.id, idx)} className="absolute top-0 right-0 bg-white/80 text-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!field.allowMultiple && formData[field.id] instanceof File && (
+                    <video
+                      src={URL.createObjectURL(formData[field.id] as File)}
+                      controls
+                      className="mt-2 max-h-40 rounded border border-gray-200 object-contain"
+                    />
+                  )}
+                </div>
+              ) : field.type === 'textarea' ? (
                 <textarea
                   className={fieldClasses}
                   placeholder={field.placeholder}

@@ -1,7 +1,7 @@
 // Field type definitions for the form builder
 import { 
   Type, Mail, Hash, Phone, AlignLeft, Calendar, 
-  Clock, ChevronDown, CheckSquare, Circle, Link 
+  Clock, ChevronDown, CheckSquare, Circle, Link, Image as ImageIcon, Video as VideoIcon
 } from 'lucide-react';
 import { FieldTypeDefinition } from '@/lib/form-builder-types';
 
@@ -17,4 +17,6 @@ export const FIELD_TYPES: FieldTypeDefinition[] = [
   { type: 'checkbox', label: 'Checkbox', icon: CheckSquare },
   { type: 'radio', label: 'Radio Button', icon: Circle },
   { type: 'url', label: 'URL', icon: Link },
+  { type: 'image', label: 'Image Upload', icon: ImageIcon },
+  { type: 'video', label: 'Video Upload', icon: VideoIcon },
 ];

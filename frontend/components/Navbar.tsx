@@ -249,12 +249,49 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Quick Links (desktop) */}
+        {/* Quick Links (desktop, pinkish UI) */}
         <div className="hidden lg:flex items-center" style={{ gap: theme.spacing.sm }}>
-          <button onClick={() => router.push('/categories')} className="text-sm text-gray-700 hover:text-blue-600">Categories</button>
-          <button onClick={() => router.push('/cart')} className="text-sm text-gray-700 hover:text-blue-600">Cart</button>
-          <button onClick={() => router.push('/flash-sales')} className="text-sm text-gray-700 hover:text-blue-600">Flash Sales</button>
-          <button onClick={() => router.push('/promotions')} className="text-sm text-gray-700 hover:text-blue-600">Promotions</button>
+          <button
+            onClick={() => router.push('/categories')}
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150"
+            style={{
+              background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
+              color: 'white',
+              boxShadow: '0 2px 8px rgba(255, 107, 138, 0.15)',
+              marginRight: theme.spacing.xs,
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Categories
+          </button>
+          <button
+            onClick={() => router.push('/cart')}
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150"
+            style={{
+              background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
+              color: 'white',
+              boxShadow: '0 2px 8px rgba(255, 107, 138, 0.15)',
+              marginRight: theme.spacing.xs,
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Cart
+          </button>
+          <button
+            onClick={() => router.push('/flash-sales')}
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150"
+            style={{
+              background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
+              color: 'white',
+              boxShadow: '0 2px 8px rgba(255, 107, 138, 0.15)',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Flash Sales
+          </button>
         </div>
 
         {/* Action Buttons */}

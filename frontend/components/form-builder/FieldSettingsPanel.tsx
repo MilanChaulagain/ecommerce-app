@@ -5,6 +5,7 @@ import TextFieldSettings from './field-settings/TextFieldSettings';
 import NumberFieldSettings from './field-settings/NumberFieldSettings';
 import OptionsFieldSettings from './field-settings/OptionsFieldSettings';
 import CheckboxFieldSettings from './field-settings/CheckboxFieldSettings';
+import MediaFieldSettings from './field-settings/MediaFieldSettings';
 
 interface FieldSettingsPanelProps {
   field: FormField | null;
@@ -31,17 +32,16 @@ export default function FieldSettingsPanel({ field, onUpdateField }: FieldSettin
       case 'url':
       case 'textarea':
         return <TextFieldSettings field={field} onUpdateField={onUpdateField} />;
-      
       case 'number':
         return <NumberFieldSettings field={field} onUpdateField={onUpdateField} />;
-      
       case 'select':
       case 'radio':
         return <OptionsFieldSettings field={field} onUpdateField={onUpdateField} />;
-      
       case 'checkbox':
         return <CheckboxFieldSettings field={field} onUpdateField={onUpdateField} />;
-      
+      case 'image':
+      case 'video':
+        return <MediaFieldSettings field={field} onUpdateField={onUpdateField} />;
       default:
         return null;
     }

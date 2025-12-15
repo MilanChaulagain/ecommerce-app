@@ -1,11 +1,24 @@
 // Type definitions for Form Builder (aligned with backend FormSchema)
 import { LucideIcon } from 'lucide-react';
 
-// Backend field types
-export type BackendFieldType = 'text' | 'number' | 'dropdown' | 'radio' | 'checkbox';
+// Backend field types (add image, video)
+export type BackendFieldType = 'text' | 'number' | 'dropdown' | 'radio' | 'checkbox' | 'image' | 'video';
 
 // Frontend field types (UI uses 'select' instead of 'dropdown')
-export type FieldType = 'text' | 'number' | 'select' | 'radio' | 'checkbox' | 'email' | 'tel' | 'textarea' | 'date' | 'time' | 'url';
+export type FieldType =
+  | 'text'
+  | 'number'
+  | 'select'
+  | 'radio'
+  | 'checkbox'
+  | 'email'
+  | 'tel'
+  | 'textarea'
+  | 'date'
+  | 'time'
+  | 'url'
+  | 'image'
+  | 'video';
 
 export interface FieldOption {
   value: string;
@@ -20,6 +33,9 @@ export interface FormFieldStructure {
   descriptions?: { [languageCode: string]: string };
   required: boolean;
   options?: string[]; // For dropdown/radio - just values, labels come from translations
+  // For image/video fields
+  accept?: string; // e.g., 'image/*', 'video/mp4', etc.
+  maxSizeMB?: number;
 }
 
 // Frontend form field (extended for UI)
@@ -40,6 +56,9 @@ export interface FormField {
   min?: number;
   max?: number;
   allowMultiple?: boolean;
+  // For image/video fields
+  accept?: string; // e.g., 'image/*', 'video/mp4', etc.
+  maxSizeMB?: number;
 }
 
 // Form relationship (for linking forms)
@@ -111,13 +130,22 @@ export function toBackendFieldStructure(
   field: FormField,
   languageConfig: LanguageConfig
 ): FormFieldStructure {
-  const backendType: BackendFieldType = 
-    field.type === 'select' ? 'dropdown' : 
-    field.type === 'text' || field.type === 'email' || field.type === 'tel' || 
-    field.type === 'textarea' || field.type === 'date' || field.type === 'time' || 
-    field.type === 'url' ? 'text' : field.type as BackendFieldType;
+  let backendType: BackendFieldType;
+  if (field.type === 'select') backendType = 'dropdown';
+  else if (
+    field.type === 'text' ||
+    field.type === 'email' ||
+    field.type === 'tel' ||
+    field.type === 'textarea' ||
+    field.type === 'date' ||
+    field.type === 'time' ||
+    field.type === 'url'
+  ) backendType = 'text';
+  else if (field.type === 'image') backendType = 'image';
+  else if (field.type === 'video') backendType = 'video';
+  else backendType = field.type as BackendFieldType;
 
-  return {
+  const backendField: FormFieldStructure = {
     id: field.id,
     type: backendType,
     labels: field.labels || { [languageConfig.primary]: field.label },
@@ -125,6 +153,11 @@ export function toBackendFieldStructure(
     required: field.required,
     options: field.options?.map(opt => opt.value),
   };
+  if (field.type === 'image' || field.type === 'video') {
+    backendField.accept = field.accept;
+    backendField.maxSizeMB = field.maxSizeMB;
+  }
+  return backendField;
 }
 
 // Helper function to convert backend field to frontend structure
@@ -132,9 +165,10 @@ export function fromBackendFieldStructure(
   backendField: FormFieldStructure,
   primaryLanguage: string
 ): FormField {
-  return {
+  const type: FieldType = backendField.type === 'dropdown' ? 'select' : backendField.type as FieldType;
+  const field: FormField = {
     id: backendField.id,
-    type: backendField.type === 'dropdown' ? 'select' : backendField.type,
+    type,
     label: backendField.labels[primaryLanguage] || Object.values(backendField.labels)[0] || '',
     labels: backendField.labels,
     name: backendField.id,
@@ -152,4 +186,9 @@ export function fromBackendFieldStructure(
     }),
     descriptions: backendField.descriptions,
   };
+  if (type === 'image' || type === 'video') {
+    field.accept = backendField.accept;
+    field.maxSizeMB = backendField.maxSizeMB;
+  }
+  return field;
 }
