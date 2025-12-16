@@ -1,5 +1,12 @@
 from rest_framework import serializers
-from .models import FormSchema, FormSubmission
+from .models import FormSchema, FormSubmission, FormSubmissionFile
+
+# Serializer for uploaded files
+class FormSubmissionFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FormSubmissionFile
+        fields = ['id', 'field_id', 'file', 'uploaded_at']
+
 
 
 class FormSchemaSerializer(serializers.ModelSerializer):
@@ -43,14 +50,15 @@ class FormSubmissionSerializer(serializers.ModelSerializer):
     """Serializer for submitting and retrieving form data"""
     form_title = serializers.CharField(source='form_schema.title', read_only=True)
     form_slug = serializers.CharField(source='form_schema.slug', read_only=True)
-    
+    files = FormSubmissionFileSerializer(many=True, read_only=True)
+
     class Meta:
         model = FormSubmission
         fields = [
             'id', 'form_schema', 'form_title', 'form_slug',
-            'data', 'submitted_at', 'submitted_by', 'ip_address'
+            'data', 'submitted_at', 'submitted_by', 'ip_address', 'files'
         ]
-        read_only_fields = ['submitted_at']
+        read_only_fields = ['submitted_at', 'files']
     
     def validate(self, attrs):
         """Validate submission data against the form schema"""

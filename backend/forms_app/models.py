@@ -83,7 +83,6 @@ class FormSubmission(models.Model):
     data = models.JSONField(
         help_text="User-submitted data matching the form schema"
     )
-    
     # Track submission metadata
     submitted_at = models.DateTimeField(auto_now_add=True)
     submitted_by = models.ForeignKey(
@@ -94,13 +93,27 @@ class FormSubmission(models.Model):
         related_name='submissions'
     )
     ip_address = models.GenericIPAddressField(null=True, blank=True)
-    
+
     class Meta:
         ordering = ['-submitted_at']
         indexes = [
             models.Index(fields=['-submitted_at']),
             models.Index(fields=['form_schema', '-submitted_at']),
         ]
-        
+
     def __str__(self):
         return f"Submission to {self.form_schema.title} at {self.submitted_at}"
+
+# New model for uploaded files (image/video)
+class FormSubmissionFile(models.Model):
+    submission = models.ForeignKey(
+        FormSubmission,
+        on_delete=models.CASCADE,
+        related_name='files'
+    )
+    field_id = models.CharField(max_length=100, help_text="ID of the form field this file belongs to")
+    file = models.FileField(upload_to='uploads/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"File for {self.submission} - {self.field_id}"

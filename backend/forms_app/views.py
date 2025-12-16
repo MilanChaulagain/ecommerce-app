@@ -135,16 +135,28 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """
         Handle form submission - public endpoint, no authentication required
+        Accepts files via multipart/form-data. Expects file fields to be named as 'file__<field_id>' (e.g., file__image1).
         """
+        from .models import FormSubmissionFile
+
         slug = request.data.get('slug')
         if not slug:
             return Response({'error': 'Form slug is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         form_schema = get_object_or_404(FormSchema, slug=slug)
 
+        # Parse JSON data if sent as string
+        import json
+        data = request.data.get('data', {})
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except Exception:
+                data = {}
+
         submission_data = {
             'form_schema': form_schema.id,
-            'data': request.data.get('data', {}),
+            'data': data,
             'ip_address': self.get_client_ip(request)
         }
 
@@ -154,10 +166,20 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(data=submission_data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        submission = serializer.save()
+
+        # Handle file uploads: expect files as file__<field_id>
+        for key, file in request.FILES.items():
+            if key.startswith('file__'):
+                field_id = key.replace('file__', '', 1)
+                FormSubmissionFile.objects.create(
+                    submission=submission,
+                    field_id=field_id,
+                    file=file
+                )
 
         return Response(
-            {'message': 'Form submitted successfully', 'submission_id': serializer.data['id']},
+            {'message': 'Form submitted successfully', 'submission_id': submission.id},
             status=status.HTTP_201_CREATED
         )
 
