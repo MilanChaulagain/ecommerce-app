@@ -120,10 +120,29 @@ export default function FormPreviewTab({ form, onSubmitSuccess }: FormPreviewTab
     setErrorMessage('');
 
     try {
-      await apiClient.submissions.submitForm({
-        slug: form.slug,
-        data: formData,
-      });
+      // Build FormData for file and non-file fields
+      const fd = new FormData();
+      fd.append('slug', form.slug);
+      // Collect non-file data
+      const data: Record<string, any> = {};
+      for (const backendField of form.fields_structure) {
+        const field = fromBackendFieldStructure(backendField, form.language_config.primary);
+        const value = formData[field.id];
+        if (field.type === 'image' || field.type === 'video') {
+          if (field.allowMultiple && Array.isArray(value)) {
+            value.forEach((file: File, idx: number) => {
+              fd.append(`file__${field.id}_${idx}`, file);
+            });
+          } else if (value instanceof File) {
+            fd.append(`file__${field.id}`, value);
+          }
+        } else {
+          data[field.id] = value;
+        }
+      }
+      fd.append('data', JSON.stringify(data));
+
+      await apiClient.submissions.submitForm(fd);
 
       setStatus('success');
       
