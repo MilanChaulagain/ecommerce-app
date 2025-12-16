@@ -60,6 +60,11 @@ INSTALLED_APPS = [
     'users',
     'forms_app',
     'products',
+    'productManagement',
+    'productsearch',
+    'chats',
+    'channels',
+    'UserHome'
 ]
 
 MIDDLEWARE = [
