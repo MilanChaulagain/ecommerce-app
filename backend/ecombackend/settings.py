@@ -53,6 +53,11 @@ CORS_ALLOWED_ORIGINS = [
 ]
 CORS_ALLOW_CREDENTIALS = True
 
+# During local development, allow all origins to simplify local frontend testing.
+# In production, set explicit allowed origins only.
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
+
 
 # Application definition
 
