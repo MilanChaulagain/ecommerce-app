@@ -476,6 +476,28 @@ export default function Navbar() {
                       </button>
                     )}
                     <button
+                      onClick={() => { setShowUserMenu(false); router.push('/account'); }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: theme.spacing.xs,
+                        padding: theme.spacing.md,
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        color: theme.colors.neutral[700],
+                        transition: 'background-color 0.12s, transform 0.12s',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFF5F7'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateX(4px)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateX(0)'; }}
+                    >
+                      <User style={{ width: '16px', height: '16px' }} />
+                      <span style={{ marginLeft: theme.spacing.xs, fontWeight: 600, color: theme.colors.neutral[900] }}>My Home</span>
+                    </button>
+                    <button
                       onClick={handleLogout}
                       style={{
                         width: '100%',

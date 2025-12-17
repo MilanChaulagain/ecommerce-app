@@ -9,6 +9,7 @@ from .views import (
     LogoutView,
     EmailTokenObtainPairView
 )
+from .views import UsersListView, SetUserRoleView
 
 urlpatterns = [
     # JWT Authentication
@@ -19,6 +20,10 @@ urlpatterns = [
     
     # Current user profile
     path('me/', CurrentUserView.as_view(), name='current_user'),
+
+    # Admin user management
+    path('', UsersListView.as_view(), name='users_list'),
+    path('<int:user_id>/role/', SetUserRoleView.as_view(), name='set_user_role'),
     
     # Social Authentication callbacks
     path('social/tiktok/callback/', TikTokLoginCallback.as_view(), name='tiktok-callback'),

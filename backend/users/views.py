@@ -10,6 +10,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserRole
 from .serializers import UserSerializer
+from rest_framework.permissions import IsAdminUser
+from rest_framework.decorators import permission_classes
+from rest_framework import generics
+from django.contrib.auth.models import User
 
 load_dotenv()
 
@@ -392,3 +396,43 @@ class EmailTokenObtainPairView(APIView):
                 'role': role,
             }
         })
+
+
+class UsersListView(APIView):
+    """List all users (admin only)"""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.all().select_related()
+        data = []
+        for u in users:
+            try:
+                role = UserRole.objects.get(user=u).role
+            except UserRole.DoesNotExist:
+                role = 'user'
+            data.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'role': role,
+            })
+        return Response({'count': len(data), 'results': data})
+
+
+class SetUserRoleView(APIView):
+    """Set a user's role (admin only)"""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, user_id):
+        role = request.data.get('role')
+        if role not in dict(UserRole.ROLE_CHOICES):
+            return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        userrole, _ = UserRole.objects.get_or_create(user=user)
+        userrole.role = role
+        userrole.save()
+        return Response({'message': 'Role updated', 'user': {'id': user.id, 'username': user.username, 'role': userrole.role}})
