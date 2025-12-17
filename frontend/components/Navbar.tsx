@@ -152,23 +152,6 @@ export default function Navbar() {
     // No full page reload
   };
 
-  // // Close login modal when clicking outside
-  // useEffect(() => {
-  //   const handleClickOutside = (event: MouseEvent) => {
-  //     if (loginModalRef.current && !loginModalRef.current.contains(event.target as Node)) {
-  //       setShowLoginModal(false);
-  //     }
-  //   };
-
-  //   if (showLoginModal) {
-  //     document.addEventListener('mousedown', handleClickOutside);
-  //   }
-
-  //   return () => {
-  //     document.removeEventListener('mousedown', handleClickOutside);
-  //   };
-  // }, [showLoginModal]);
-
   const navbarStyle = {
     position: theme.components.navbar.sticky ? ('sticky' as const) : ('relative' as const),
     top: 0,
@@ -178,53 +161,65 @@ export default function Navbar() {
     zIndex: theme.components.navbar.zIndex,
   };
 
-  const logoStyle = {
-    width: theme.components.navbar.logo.width,
-    height: theme.components.navbar.logo.height,
-    borderRadius: theme.components.navbar.logo.borderRadius,
-    background: createGradient(
-      theme.components.navbar.logo.gradientFrom,
-      theme.components.navbar.logo.gradientTo
-    ),
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
+
 
   return (
-    <nav style={navbarStyle}>
+    <nav
+      style={{
+        ...navbarStyle,
+        background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
+        backgroundSize: '200% 200%',
+        transition: 'background-position 0.8s ease, box-shadow 0.3s ease',
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.backgroundPosition = 'right center') }
+      onMouseLeave={(e) => (e.currentTarget.style.backgroundPosition = 'left center') }
+    >
       {/* Desktop Navigation */}
       <div className="hidden md:flex items-center justify-between w-full max-w-7xl mx-auto px-4" style={{ height: theme.components.navbar.height.desktop }}>
-        {/* Logo and Brand */}
-        <div className="flex items-center" style={{ gap: theme.spacing.sm, cursor: 'pointer' }} onClick={() => router.push('/') }>
-          <div style={logoStyle}>
-            <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: theme.components.navbar.logo.borderRadius }} loading="eager" />
+
+
+        <div className="flex items-center" style={{ gap: '8px', cursor: 'pointer' }} onClick={() => router.push('/') }>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              overflow: 'hidden',
+            }}>
+              <Image src="/logo.png" alt="Logo" width={50} height={50} style={{ borderRadius: '50%' }} loading="eager" />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+              <span style={{
+                fontSize: '1.125rem',
+                fontWeight: 'bold',
+                color: 'white',
+                letterSpacing: '-0.5px',
+              }}>
+                {theme.brand.name}
+              </span>
+              <span style={{
+                fontSize: '0.75rem',
+                color: 'rgba(255, 255, 255, 0.9)',
+                fontWeight: '500',
+              }}>
+                Kids Store
+              </span>
+            </div>
           </div>
-          <span 
-            style={{
-              fontSize: theme.components.navbar.logo.fontSize,
-              fontWeight: theme.components.navbar.logo.fontWeight as 'bold',
-              background: createGradient(
-                theme.components.navbar.logo.gradientFrom,
-                theme.components.navbar.logo.gradientTo
-              ),
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            {theme.brand.name}
-          </span>
-        </div>
 
         {/* Search Bar (narrower) */}
         <div className="flex-1" style={{ maxWidth: '28rem', marginLeft: theme.spacing.lg, marginRight: theme.spacing.lg }}>
           <div style={{ position: 'relative' }}>
             <Search 
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" 
+              className="absolute left-3 top-1/2 -translate-y-1/2" 
               style={{ 
                 width: theme.components.navbar.searchBar.iconSize,
                 height: theme.components.navbar.searchBar.iconSize,
+                color: '#C2185B'
               }}
             />
             <input
@@ -236,12 +231,14 @@ export default function Navbar() {
                 paddingRight: '0.75rem',
                 paddingTop: theme.components.navbar.searchBar.paddingY,
                 paddingBottom: theme.components.navbar.searchBar.paddingY,
-                borderWidth: '1px',
-                borderColor: theme.components.navbar.searchBar.borderColor,
+                borderWidth: '0',
                 borderRadius: theme.components.navbar.searchBar.borderRadius,
                 fontSize: theme.components.navbar.searchBar.fontSize,
                 outline: 'none',
-                transition: 'border-color 0.2s',
+                transition: 'box-shadow 0.18s ease, transform 0.12s',
+                backgroundColor: 'white',
+                color: theme.colors.neutral[900],
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)'
               }}
               onFocus={() => router.push('/search')}
               readOnly
@@ -253,9 +250,9 @@ export default function Navbar() {
         <div className="hidden lg:flex items-center" style={{ gap: theme.spacing.sm }}>
           <button
             onClick={() => router.push('/categories')}
-            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150"
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"
             style={{
-              background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
+              background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 80%)',
               color: 'white',
               boxShadow: '0 2px 8px rgba(255, 107, 138, 0.15)',
               marginRight: theme.spacing.xs,
@@ -267,7 +264,7 @@ export default function Navbar() {
           </button>
           <button
             onClick={() => router.push('/cart')}
-            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150"
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"
             style={{
               background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
               color: 'white',
@@ -281,7 +278,7 @@ export default function Navbar() {
           </button>
           <button
             onClick={() => router.push('/flash-sales')}
-            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150"
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"
             style={{
               background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 100%)',
               color: 'white',
@@ -308,22 +305,27 @@ export default function Navbar() {
                 paddingRight: theme.components.navbar.buttons.login.paddingX,
                 paddingTop: theme.components.navbar.buttons.login.paddingY,
                 paddingBottom: theme.components.navbar.buttons.login.paddingY,
-                border: 'none',
-                borderRadius: theme.components.navbar.buttons.login.borderRadius,
+                borderRadius: '9999px',
                 fontSize: theme.components.navbar.buttons.login.fontSize,
-                background: 'transparent',
-                color: theme.colors.primary,
+                background: 'linear-gradient(90deg, rgba(255,255,255,0.98), rgba(255,255,255,0.95))',
+                color: '#C2185B',
                 cursor: 'pointer',
-                transition: 'opacity 0.2s',
+                transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+                boxShadow: '0 6px 20px rgba(194,24,91,0.08)',
+                border: '1px solid rgba(194,24,91,0.08)'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-3px) scale(1.02)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 14px 40px rgba(194,24,91,0.14)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0) scale(1)'; (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 6px 20px rgba(194,24,91,0.08)'; }}
             >
-              <span>Dashboard</span>
+              <TrendingUp style={{ width: '16px', height: '16px', color: '#C2185B' }} />
+              <span style={{ fontWeight: 600 }}>Dashboard</span>
+              <span style={{ marginLeft: theme.spacing.xs, background: '#FFF0F4', color: '#C2185B', padding: '2px 6px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700 }}>Admin</span>
             </button>
           )}
           {/* Login Button / User Profile */}
-          <div style={{ position: 'relative' }} ref={loginModalRef}>
+          <div style={{ 
+            position: 'relative' ,
+            }} ref={loginModalRef}>
             {!isLoggedIn ? (
               <>
                 <button 
@@ -354,7 +356,8 @@ export default function Navbar() {
                     width: theme.components.navbar.buttons.iconSize, 
                     height: theme.components.navbar.buttons.iconSize,
                     color: theme.components.navbar.buttons.login.textColor,
-                  }} />
+                  }} 
+                  />
                   <span>Login</span>
                 </button>
                 {showLoginModal && (
@@ -375,16 +378,16 @@ export default function Navbar() {
                     paddingBottom: theme.spacing.sm,
                     border: `1px solid ${theme.colors.neutral[300]}`,
                     borderRadius: theme.borderRadius.full,
-                    backgroundColor: 'white',
+                    backgroundColor: 'pink',
                     cursor: 'pointer',
                     transition: 'all 0.2s',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = theme.colors.neutral[50];
+                    e.currentTarget.style.backgroundColor = theme.colors.userbtn;
                     e.currentTarget.style.borderColor = theme.colors.primary;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'white';
+                    e.currentTarget.style.backgroundColor = 'pink';
                     e.currentTarget.style.borderColor = theme.colors.neutral[300];
                   }}
                 >
@@ -461,15 +464,15 @@ export default function Navbar() {
                           backgroundColor: 'transparent',
                           cursor: 'pointer',
                           fontSize: '14px',
-                          color: theme.colors.primary,
-                          transition: 'background-color 0.2s',
+                          color: '#C2185B',
+                          transition: 'background-color 0.12s, transform 0.12s',
                           textAlign: 'left',
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.neutral[50]}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFF5F7'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateX(4px)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateX(0)'; }}
                       >
-                        <TrendingUp style={{ width: '16px', height: '16px' }} />
-                        <span>Dashboard</span>
+                        <TrendingUp style={{ width: '16px', height: '16px', color: '#C2185B' }} />
+                        <span style={{ marginLeft: theme.spacing.xs, fontWeight: 600, color: theme.colors.neutral[900] }}>Dashboard</span>
                       </button>
                     )}
                     <button
@@ -511,20 +514,20 @@ export default function Navbar() {
               cursor: 'pointer',
               transition: 'background-color 0.2s',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.colors.userbtn}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
             <ShoppingCart style={{ 
               width: theme.components.navbar.buttons.iconSize, 
               height: theme.components.navbar.buttons.iconSize,
-              color: theme.colors.neutral[700],
+              color: 'white',
             }} />
             <span 
               style={{
                 position: 'absolute',
                 top: '-0.25rem',
                 right: '-0.25rem',
-                backgroundColor: theme.colors.primary,
+                backgroundColor: theme.colors.error,
                 color: 'white',
                 fontSize: '0.75rem',
                 width: '1rem',
@@ -533,6 +536,8 @@ export default function Navbar() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: theme.borderRadius.full,
+                border: `1px solid ${theme.colors.error}`,
+                fontWeight: 700,
               }}
             >
               0
@@ -542,11 +547,11 @@ export default function Navbar() {
             <button
               ref={languageBtnRef}
               onClick={() => setShowLanguageModal((v) => !v)}
-              className="text-sm text-gray-700 hover:text-blue-600 flex items-center gap-2"
+              className="text-sm text-white hover:text-white flex items-center gap-2"
               aria-haspopup="true"
               aria-expanded={showLanguageModal}
             >
-              <Globe className="w-4 h-4" /> {language === 'ne' ? 'ने' : 'EN'}
+              <Globe className="w-4 h-4 text-white" /> {language === 'ne' ? 'ने' : 'EN'}
             </button>
             {showLanguageModal && (
               <div id="language-dropdown" style={{ position: 'absolute', right: 0, top: 'calc(100% + 0.5rem)', zIndex: 100 }}>
@@ -618,6 +623,7 @@ export default function Navbar() {
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
+              onClick={()=> router.push('/notifications')}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
             >
@@ -625,7 +631,7 @@ export default function Navbar() {
             </button>
 
             {/* Cart Button */}
-            <button 
+            {/* <button 
               style={{
                 position: 'relative',
                 padding: '8px',
@@ -657,7 +663,7 @@ export default function Navbar() {
               }}>
                 2
               </span>
-            </button>
+            </button> */}
 
             {/* Login Button */}
             {!isLoggedIn ? (

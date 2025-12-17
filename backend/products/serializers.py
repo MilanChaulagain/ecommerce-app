@@ -1,6 +1,17 @@
 from rest_framework import serializers
 from .models import ProductForm, Sales, Dashboard
-from forms_app.serializers import FormSchemaSerializer
+# Try importing FormSchemaSerializer from current app name, support fallback if project uses 'forms_app_new'
+try:
+    from forms_app.serializers import FormSchemaSerializer
+except ImportError:
+    try:
+        from forms_app_new.serializers import FormSchemaSerializer
+    except ImportError as exc:
+        # Provide a clear error if neither module is available
+        raise ImportError(
+            "Could not import FormSchemaSerializer from 'forms_app' or 'forms_app_new'.\n"
+            "Make sure one of these packages exists and is on PYTHONPATH, and is listed in INSTALLED_APPS."
+        ) from exc
 
 
 class ProductFormSerializer(serializers.ModelSerializer):
