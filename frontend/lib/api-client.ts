@@ -459,12 +459,94 @@ export const submissionsAPI = {
   },
 };
 
-// ==================== Export Default Client ====================
+// ==================== Groups & Dashboard API ====================
+export const groupsAPI = {
+  async listGroups() {
+    return request<any>('/api/user/groups/', { requireAuth: true });
+  },
+  async createGroup(payload: { name: string; description?: string }) {
+    return request<any>('/api/user/groups/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async getGroup(id: number) {
+    return request<any>(`/api/user/groups/${id}/`, { requireAuth: true });
+  },
+  async updateGroup(id: number, payload: any) {
+    return request<any>(`/api/user/groups/${id}/`, { method: 'PUT', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async deleteGroup(id: number) {
+    return request<any>(`/api/user/groups/${id}/`, { method: 'DELETE', requireAuth: true });
+  },
+  async listMembers(groupId: number) {
+    return request<any>(`/api/user/groups/${groupId}/members/`, { requireAuth: true });
+  },
+  async addMember(groupId: number, userId: number, role = 'member') {
+    return request<any>(`/api/user/groups/${groupId}/members/`, { method: 'POST', body: JSON.stringify({ user_id: userId, role }), requireAuth: true });
+  },
+  async removeMember(groupId: number, userId: number) {
+    return request<any>(`/api/user/groups/${groupId}/members/`, { method: 'DELETE', body: JSON.stringify({ user_id: userId }), requireAuth: true });
+  },
+};
 
-const apiClient = {
+export const dashboardAPI = {
+  async getDashboard() {
+    return request<any>('/api/user/dashboard/', { requireAuth: true });
+  },
+  async saveDashboard(config: any) {
+    return request<any>('/api/user/dashboard/', { method: 'POST', body: JSON.stringify({ config }), requireAuth: true });
+  }
+};
+
+// ==================== User API (profile / home) ====================
+
+export const userAPI = {
+  async getHome() {
+    return request<any>('/api/user/home/', { requireAuth: true });
+  },
+  async getProfileForm() {
+    return request<any>('/api/user/profile-form/', { requireAuth: true });
+  },
+  async saveProfile(payload: any) {
+    // Backend expects { data: [{ field: <id>, value: <val> }, ...] }
+    let body = payload;
+    if (payload && typeof payload === 'object' && payload.values) {
+      const values = payload.values as Record<string, any>;
+      body = { data: Object.keys(values).map((k) => ({ field: Number(k), value: values[k] })) };
+    }
+    return request<any>('/api/user/profile/save/', { method: 'POST', body: JSON.stringify(body), requireAuth: true });
+  },
+};
+
+export const usersAPI = {
+  async listUsers() {
+    return request<any>('/api/users/', { requireAuth: true });
+  },
+  async setRole(userId: number, role: string) {
+    return request<any>(`/api/users/${userId}/role/`, { method: 'POST', body: JSON.stringify({ role }), requireAuth: true });
+  }
+};
+
+// ==================== Groups & Dashboard API (already defined above) ====================
+// groupsAPI and dashboardAPI are defined earlier in this file
+
+// ==================== Typed API Client Export ====================
+export interface ApiClient {
+  auth: typeof authAPI;
+  forms: typeof formsAPI;
+  submissions: typeof submissionsAPI;
+  groups: typeof groupsAPI;
+  dashboard: typeof dashboardAPI;
+  user: typeof userAPI;
+  users: typeof usersAPI;
+}
+
+const apiClient: ApiClient = {
   auth: authAPI,
   forms: formsAPI,
   submissions: submissionsAPI,
+  groups: groupsAPI,
+  dashboard: dashboardAPI,
+  user: userAPI,
+  users: usersAPI,
 };
 
 export default apiClient;
