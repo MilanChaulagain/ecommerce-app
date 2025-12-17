@@ -25,6 +25,8 @@ urlpatterns = [
     path('api/users/', include('users.urls')),
     path('api/', include('forms_app.urls')),
     path('api/', include('products.urls')),
+    # UserHome app endpoints (profile / dashboard)
+    path('api/user/', include('UserHome.urls')),
 ]
 
 # Serve media files in development

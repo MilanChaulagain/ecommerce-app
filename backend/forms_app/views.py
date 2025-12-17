@@ -2,25 +2,20 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
-from .models import FormSchema, FormSubmission
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from .models import FormSchema, FormSubmission, FormFile
 from .serializers import (
     FormSchemaSerializer, 
     FormSubmissionSerializer,
-    FormSubmissionListSerializer
+    FormSubmissionListSerializer,
+    # FormFileSerializer if needed
 )
-from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsSuperEmployee
 
 
 class FormSchemaViewSet(viewsets.ModelViewSet):
     """
     API endpoints for managing form schemas.
-    
-    - list: Get all forms created by the user
-    - create: Create a new form schema
-    - retrieve: Get a specific form by slug
-    - update: Update form structure
-    - destroy: Delete a form (disabled)
     """
     queryset = FormSchema.objects.all()
     serializer_class = FormSchemaSerializer
@@ -112,19 +107,17 @@ class FormSchemaViewSet(viewsets.ModelViewSet):
 class FormSubmissionViewSet(viewsets.ModelViewSet):
     """
     API endpoints for form submissions.
-    
-    - list: Get all submissions (filtered by user's forms)
-    - create: Submit a new form response (public - no authentication required)
-    - retrieve: Get a specific submission
     """
     queryset = FormSubmission.objects.all()
     serializer_class = FormSubmissionSerializer
+    # Default: require authentication for most actions, but allow public submission (create)
+    permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
-        """Allow public submissions for create action"""
+        """Allow unauthenticated users to create (submit) forms, but require auth for other actions."""
         if self.action == 'create':
-            return []  # No authentication required for submissions
-        return [IsAuthenticated()]  # Other actions require auth
+            return [AllowAny()]
+        return [perm() for perm in self.permission_classes]
 
     def get_queryset(self):
         """Only show submissions for forms the user owns"""
@@ -134,49 +127,47 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """
-        Handle form submission - public endpoint, no authentication required
-        Accepts files via multipart/form-data. Expects file fields to be named as 'file__<field_id>' (e.g., file__image1).
+        Handle form submission (can be public if you remove authentication requirement)
         """
-        from .models import FormSubmissionFile
-
         slug = request.data.get('slug')
         if not slug:
             return Response({'error': 'Form slug is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         form_schema = get_object_or_404(FormSchema, slug=slug)
 
-        # Parse JSON data if sent as string
-        import json
-        data = request.data.get('data', {})
-        if isinstance(data, str):
-            try:
-                data = json.loads(data)
-            except Exception:
-                data = {}
-
         submission_data = {
             'form_schema': form_schema.id,
-            'data': data,
+            'data': request.data.get('data', {}),
             'ip_address': self.get_client_ip(request)
         }
 
-        # Only add submitted_by if user is authenticated
         if request.user.is_authenticated:
             submission_data['submitted_by'] = request.user.id
 
         serializer = self.get_serializer(data=submission_data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            # Log errors to server console for debugging
+            print("Form submission validation errors:", serializer.errors)
+            return Response({
+                'message': 'Validation failed',
+                'errors': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save and return the created submission instance
         submission = serializer.save()
 
-        # Handle file uploads: expect files as file__<field_id>
-        for key, file in request.FILES.items():
-            if key.startswith('file__'):
-                field_id = key.replace('file__', '', 1)
-                FormSubmissionFile.objects.create(
-                    submission=submission,
-                    field_id=field_id,
-                    file=file
-                )
+        # Handle any uploaded files in request.FILES (support FormData uploads)
+        for file_key, uploaded in request.FILES.items():
+            # uploaded may be an UploadedFile or list-like; handle both
+            if hasattr(uploaded, 'read'):
+                FormFile.objects.create(submission=submission, file=uploaded)
+            else:
+                # If multiple files under same key
+                try:
+                    for f in uploaded:
+                        FormFile.objects.create(submission=submission, file=f)
+                except Exception:
+                    pass
 
         return Response(
             {'message': 'Form submitted successfully', 'submission_id': submission.id},
