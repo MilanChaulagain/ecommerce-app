@@ -1,3 +1,4 @@
+
 """
 Django settings for ecombackend project.
 
@@ -10,13 +11,20 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 from decouple import config
-import os
+
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Media files (uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 104857600  # 100MB
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -44,6 +52,11 @@ CORS_ALLOWED_ORIGINS = [
     "https://mayme-maintainable-josephina.ngrok-free.dev",  # ngrok URL
 ]
 CORS_ALLOW_CREDENTIALS = True
+
+# During local development, allow all origins to simplify local frontend testing.
+# In production, set explicit allowed origins only.
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True
 
 
 # Application definition
