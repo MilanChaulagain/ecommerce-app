@@ -9,6 +9,7 @@ import FormCanvas from '@/components/form-builder/FormCanvas';
 import FieldSettingsPanel from '@/components/form-builder/FieldSettingsPanel';
 import FormPreviewModal from '@/components/form-builder/FormPreviewModal';
 import apiClient from '@/lib/api-client';
+import RelationsDesigner from '@/components/form-builder/RelationsDesigner';
 
 export default function FormBuilderPage() {
   const router = useRouter();
@@ -20,6 +21,8 @@ export default function FormBuilderPage() {
     deleteField,
     selectField,
     reorderFields,
+    addRelationship,
+    removeRelationship,
     saveForm,
     togglePreview,
     updateFormMetadata,
@@ -41,7 +44,7 @@ export default function FormBuilderPage() {
   }, [router]);
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-2">
         <div className="flex items-center justify-between">
@@ -110,7 +113,7 @@ export default function FormBuilderPage() {
       </div>
 
       {/* Main Content - 3 Column Layout */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-auto">
         {/* Left: Field Palette */}
         <FieldPalette onAddField={addField} />
 
@@ -127,6 +130,17 @@ export default function FormBuilderPage() {
         <FieldSettingsPanel
           field={state.selectedField}
           onUpdateField={updateField}
+        />
+      </div>
+
+      {/* Relations Designer */}
+      <div className="px-4 mt-16">
+        <RelationsDesigner
+          currentFormSlug={state.formSlug}
+          currentFields={state.fields}
+          currentRelationships={state.relationships}
+          addRelationship={addRelationship}
+          removeRelationship={removeRelationship}
         />
       </div>
 

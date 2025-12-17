@@ -26,6 +26,9 @@ export const themeConfig = {
     error: "#ef4444",
     warning: "#f59e0b",
     info: "#3b82f6",
+
+    //userbtn
+    userbtn: "pink",
     
     // Neutral colors
     background: "#ffffff",
