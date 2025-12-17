@@ -9,12 +9,11 @@ import Footer from "@/components/Footer";
 export default function Home() {
   return (
     <>
-      <div style={{ paddingBottom: '80px' }}>
-        <Hero />
+      <div className="mb-14 md:mb-0">
         <Categories />
+        <FeaturedProducts />
         <FlashSales />
         <PromotionalBanners />
-        <FeaturedProducts />
         <Footer />
       </div>
     </>

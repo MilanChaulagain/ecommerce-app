@@ -433,11 +433,13 @@ export const submissionsAPI = {
    * Backend endpoint: POST /api/submissions/
    * Note: Backend should allow public submissions
    */
-  async submitForm(payload: SubmitFormPayload): Promise<FormSubmission> {
-    return request<FormSubmission>('/api/submissions/', {
+  async submitForm(formData: FormData): Promise<FormSubmission> {
+    const response = await fetch(`${API_BASE_URL}/api/submissions/`, {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: formData,
     });
+    if (!response.ok) throw new Error('Failed to submit form');
+    return response.json();
   },
 
   /**
