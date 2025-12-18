@@ -10,6 +10,7 @@ from .views import (
     EmailTokenObtainPairView
 )
 from .views import UsersListView, SetUserRoleView
+from .views import PagePermissionListCreateView, PagePermissionDetailView
 
 urlpatterns = [
     # JWT Authentication
@@ -24,6 +25,9 @@ urlpatterns = [
     # Admin user management
     path('', UsersListView.as_view(), name='users_list'),
     path('<int:user_id>/role/', SetUserRoleView.as_view(), name='set_user_role'),
+    # Page permission management (admin / superemployee)
+    path('page-permissions/', PagePermissionListCreateView.as_view(), name='page_permissions_list'),
+    path('page-permissions/<int:pk>/', PagePermissionDetailView.as_view(), name='page_permissions_detail'),
     
     # Social Authentication callbacks
     path('social/tiktok/callback/', TikTokLoginCallback.as_view(), name='tiktok-callback'),

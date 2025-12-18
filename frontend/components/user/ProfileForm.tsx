@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import apiClient from '@/lib/api-client';
 import ProfileFieldCreator from './ProfileFieldCreator';
 
@@ -13,7 +13,7 @@ type FieldDef = {
   existing_value?: any;
 };
 
-export default function ProfileForm({ onSaved }: { onSaved?: () => void }) {
+export default function ProfileForm({ onSaved, focusFieldId }: { onSaved?: () => void, focusFieldId?: number | null }) {
   const [fields, setFields] = useState<FieldDef[] | null>(null);
   const [values, setValues] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
@@ -23,12 +23,24 @@ export default function ProfileForm({ onSaved }: { onSaved?: () => void }) {
   const [profilePicFile, setProfilePicFile] = useState<File | null>(null);
   const [profilePicPreview, setProfilePicPreview] = useState<string | null>(null);
   const [authRequired, setAuthRequired] = useState(false);
+  const fieldRefs = useRef<Record<string, any>>({});
 
   useEffect(() => {
     loadFields();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (fields && typeof focusFieldId !== 'undefined' && focusFieldId !== null) {
+      const key = String(focusFieldId);
+      const el = fieldRefs.current[key];
+      if (el && typeof el.focus === 'function') {
+        setTimeout(() => {
+          try { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {}
+        }, 120);
+      }
+    }
+  }, [fields, focusFieldId]);
   const loadFields = async () => {
     setLoading(true);
     setError(null);
@@ -175,18 +187,18 @@ export default function ProfileForm({ onSaved }: { onSaved?: () => void }) {
           <div key={f.id} className="flex flex-col">
             <label className="text-sm font-medium text-gray-200 mb-1">{(f as any).label ?? f.labels?.['en'] ?? f.id}{f.required ? ' *' : ''}</label>
             {f.type === 'textarea' ? (
-              <textarea value={values[f.id] ?? ''} onChange={(e) => handleChange(f.id, e.target.value)} className="border border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-400 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <textarea ref={(el) => (fieldRefs.current[String(f.id)] = el)} value={values[f.id] ?? ''} onChange={(e) => handleChange(f.id, e.target.value)} className="border border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-400 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             ) : f.type === 'dropdown' || f.type === 'select' ? (
-              <select value={values[f.id] ?? ''} onChange={(e) => handleChange(f.id, e.target.value)} className="border border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-400 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <select ref={(el) => (fieldRefs.current[String(f.id)] = el)} value={values[f.id] ?? ''} onChange={(e) => handleChange(f.id, e.target.value)} className="border border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-400 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">Select</option>
                 {(f.options ?? []).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
               </select>
             ) : f.type === 'checkbox' ? (
-                <input type="checkbox" checked={!!values[f.id]} onChange={(e) => handleChange(f.id, e.target.checked)} className="h-4 w-4 text-indigo-400 focus:ring-indigo-300" />
+                <input ref={(el) => (fieldRefs.current[String(f.id)] = el)} type="checkbox" checked={!!values[f.id]} onChange={(e) => handleChange(f.id, e.target.checked)} className="h-4 w-4 text-indigo-400 focus:ring-indigo-300" />
               ) : f.type === 'file' ? (
-                <input type="file" onChange={(e) => handleChange(f.id, e.target.files?.[0] ?? null)} className="border border-gray-700 bg-gray-800 text-gray-100 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <input ref={(el) => (fieldRefs.current[String(f.id)] = el)} type="file" onChange={(e) => handleChange(f.id, e.target.files?.[0] ?? null)} className="border border-gray-700 bg-gray-800 text-gray-100 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             ) : (
-              <input value={values[f.id] ?? ''} onChange={(e) => handleChange(f.id, e.target.value)} className="border border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-400 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input ref={(el) => (fieldRefs.current[String(f.id)] = el)} value={values[f.id] ?? ''} onChange={(e) => handleChange(f.id, e.target.value)} className="border border-gray-700 bg-gray-800 text-gray-100 placeholder-gray-400 rounded p-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
             )}
           </div>
         ))}

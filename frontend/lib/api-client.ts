@@ -190,6 +190,11 @@ async function request<T>(
   const bodyIsFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
   if (!bodyIsFormData) {
     headers['Content-Type'] = 'application/json';
+  } else {
+    // When sending files we might be using session/cookie auth in some setups — include credentials
+    if (requireAuth && !('credentials' in fetchOptions)) {
+      fetchOptions.credentials = 'include';
+    }
   }
 
   const url = `${API_BASE_URL}${endpoint}`;
@@ -390,6 +395,14 @@ export const formsAPI = {
   },
 
   /**
+   * Delete form by slug (SuperEmployee / admin only)
+   * Backend endpoint: DELETE /api/forms/{slug}/
+   */
+  async deleteForm(slug: string): Promise<void> {
+    return request<void>(`/api/forms/${slug}/`, { method: 'DELETE', requireAuth: true });
+  },
+
+  /**
    * Get form submissions
    * Backend endpoint: GET /api/forms/{slug}/submissions/
    */
@@ -554,6 +567,28 @@ export const userAPI = {
       body = { data: Object.keys(values).map((k) => ({ field: Number(k), value: values[k] })) };
     }
     return request<any>('/api/user/profile/save/', { method: 'POST', body: JSON.stringify(body), requireAuth: true });
+  },
+
+  async uploadProfilePicture(file: File) {
+    const fd = new FormData();
+    fd.append('profile_picture', file);
+    return request<any>('/api/user/profile/upload/', { method: 'POST', body: fd, requireAuth: true });
+  },
+  // Page permissions (admin / superemployee)
+  async listPagePermissions(): Promise<any[]> {
+    return request<any[]>('/api/users/page-permissions/', { requireAuth: true });
+  },
+  async createPagePermission(payload: any) {
+    return request<any>('/api/users/page-permissions/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async getPagePermission(id: number) {
+    return request<any>(`/api/users/page-permissions/${id}/`, { requireAuth: true });
+  },
+  async updatePagePermission(id: number, payload: any) {
+    return request<any>(`/api/users/page-permissions/${id}/`, { method: 'PUT', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async deletePagePermission(id: number) {
+    return request<any>(`/api/users/page-permissions/${id}/`, { method: 'DELETE', requireAuth: true });
   },
 };
 
