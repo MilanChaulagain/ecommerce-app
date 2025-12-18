@@ -171,9 +171,7 @@ async function request<T>(
 ): Promise<T> {
   const { requireAuth = false, ...fetchOptions } = options;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
 
   // Merge existing headers if any
   if (fetchOptions.headers) {
@@ -186,6 +184,12 @@ async function request<T>(
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+  }
+
+  // If body is FormData, let the browser set Content-Type (including boundary)
+  const bodyIsFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
+  if (!bodyIsFormData) {
+    headers['Content-Type'] = 'application/json';
   }
 
   const url = `${API_BASE_URL}${endpoint}`;
@@ -462,28 +466,41 @@ export const submissionsAPI = {
 // ==================== Groups & Dashboard API ====================
 export const groupsAPI = {
   async listGroups() {
-    return request<any>('/api/user/groups/', { requireAuth: true });
+    // backend exposes roles as Role model under /api/user/roles/
+    return request<any>('/api/user/roles/', { requireAuth: true });
   },
   async createGroup(payload: { name: string; description?: string }) {
-    return request<any>('/api/user/groups/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+    return request<any>('/api/user/roles/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
   },
   async getGroup(id: number) {
-    return request<any>(`/api/user/groups/${id}/`, { requireAuth: true });
+    return request<any>(`/api/user/roles/${id}/`, { requireAuth: true });
   },
   async updateGroup(id: number, payload: any) {
-    return request<any>(`/api/user/groups/${id}/`, { method: 'PUT', body: JSON.stringify(payload), requireAuth: true });
+    return request<any>(`/api/user/roles/${id}/`, { method: 'PUT', body: JSON.stringify(payload), requireAuth: true });
   },
   async deleteGroup(id: number) {
-    return request<any>(`/api/user/groups/${id}/`, { method: 'DELETE', requireAuth: true });
+    return request<any>(`/api/user/roles/${id}/`, { method: 'DELETE', requireAuth: true });
   },
   async listMembers(groupId: number) {
-    return request<any>(`/api/user/groups/${groupId}/members/`, { requireAuth: true });
+    // Backend doesn't expose a direct role->members endpoint; fetch users and filter by role membership
+    const users = await request<any>('/api/user/users/', { requireAuth: true });
+    const list = Array.isArray(users) ? users : (users.results ?? users);
+    return list.filter((u: any) => Array.isArray(u.groups) && u.groups.some((g: any) => Number(g.id ?? g.pk) === Number(groupId)));
   },
-  async addMember(groupId: number, userId: number, role = 'member') {
-    return request<any>(`/api/user/groups/${groupId}/members/`, { method: 'POST', body: JSON.stringify({ user_id: userId, role }), requireAuth: true });
+  async addMember(groupId: number, userId: number) {
+    // Use UserViewSet.assign_roles to add this role to the user's role set
+    // Fetch user's current roles
+    const user = await request<any>(`/api/user/users/${userId}/`, { requireAuth: true });
+    const current = Array.isArray(user.groups) ? user.groups.map((g: any) => Number(g.id ?? g.pk)) : [];
+    if (!current.includes(Number(groupId))) current.push(Number(groupId));
+    return request<any>(`/api/user/users/${userId}/assign_roles/`, { method: 'POST', body: JSON.stringify({ roles: current }), requireAuth: true });
   },
   async removeMember(groupId: number, userId: number) {
-    return request<any>(`/api/user/groups/${groupId}/members/`, { method: 'DELETE', body: JSON.stringify({ user_id: userId }), requireAuth: true });
+    // Remove the role id from the user's roles using assign_roles
+    const user = await request<any>(`/api/user/users/${userId}/`, { requireAuth: true });
+    const current = Array.isArray(user.groups) ? user.groups.map((g: any) => Number(g.id ?? g.pk)) : [];
+    const remaining = current.filter((id) => id !== Number(groupId));
+    return request<any>(`/api/user/users/${userId}/assign_roles/`, { method: 'POST', body: JSON.stringify({ roles: remaining }), requireAuth: true });
   },
 };
 
@@ -505,9 +522,16 @@ export const userAPI = {
   async getProfileForm() {
     return request<any>('/api/user/profile-form/', { requireAuth: true });
   },
+  async createProfileField(payload: { label: string; id?: string; type: string; required?: boolean; options?: string[] }) {
+    return request<any>('/api/user/profile-fields/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+  },
   async saveProfile(payload: any) {
-    // Backend expects { data: [{ field: <id>, value: <val> }, ...] }
-    let body = payload;
+    // Support FormData when files are present. Backend expects { data: [{ field, value }] }
+    if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+      return request<any>('/api/user/profile/save/', { method: 'POST', body: payload, requireAuth: true });
+    }
+
+    let body: any = payload;
     if (payload && typeof payload === 'object' && payload.values) {
       const values = payload.values as Record<string, any>;
       body = { data: Object.keys(values).map((k) => ({ field: Number(k), value: values[k] })) };

@@ -475,6 +475,30 @@ export default function Navbar() {
                         <span style={{ marginLeft: theme.spacing.xs, fontWeight: 600, color: theme.colors.neutral[900] }}>Dashboard</span>
                       </button>
                     )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => { router.push('/admin/groups'); setShowUserMenu(false); }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: theme.spacing.xs,
+                          padding: theme.spacing.md,
+                          border: 'none',
+                          backgroundColor: 'transparent',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          color: theme.colors.neutral[700],
+                          transition: 'background-color 0.12s, transform 0.12s',
+                          textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F8FAFC'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateX(4px)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateX(0)'; }}
+                      >
+                        <svg style={{ width: 16, height: 16, color: theme.colors.neutral[700] }} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" d="M8 7V3M16 7V3M3 11h18M5 21h14a2 2 0 0 0 2-2V11H3v8a2 2 0 0 0 2 2z" /></svg>
+                        <span style={{ marginLeft: theme.spacing.xs, fontWeight: 600, color: theme.colors.neutral[900] }}>Groups</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => { setShowUserMenu(false); router.push('/account'); }}
                       style={{
