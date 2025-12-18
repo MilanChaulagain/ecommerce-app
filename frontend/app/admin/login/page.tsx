@@ -33,7 +33,10 @@ export default function AdminLogin() {
       }
 
       if (typeof window !== 'undefined') {
+        // Ensure tokens are stored in both admin-specific and general keys
         localStorage.setItem('admin_token', response.access);
+        localStorage.setItem('access_token', response.access);
+        if (response.refresh) localStorage.setItem('refresh_token', response.refresh);
         localStorage.setItem('admin_user', JSON.stringify(response.user));
       }
 

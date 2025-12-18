@@ -84,6 +84,39 @@ export default function FormBuilderPage() {
               <Save className="w-3.5 h-3.5" />
               {loading ? 'Saving...' : (state.isEditMode ? 'Update' : 'Save')}
             </button>
+
+            {/* Delete button only when editing and user is admin / superemployee */}
+            {state.isEditMode && (() => {
+              try {
+                const currentUser = apiClient.auth.getUser();
+                const allowed = currentUser && (currentUser.role === 'admin' || currentUser.role === 'superemployee');
+                if (!allowed) return null;
+              } catch (e) {
+                return null;
+              }
+
+              const handleDelete = async () => {
+                if (!state.formSlug) return;
+                if (!confirm('Are you sure you want to permanently delete this form? This action cannot be undone.')) return;
+                try {
+                  await apiClient.forms.deleteForm(state.formSlug);
+                  alert('Form deleted successfully');
+                  router.push('/admin/dashboard');
+                } catch (err: any) {
+                  console.error('Failed to delete form', err);
+                  alert(`Failed to delete form: ${err?.data?.detail || err?.message || err}`);
+                }
+              };
+
+              return (
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors"
+                >
+                  Delete
+                </button>
+              );
+            })()}
           </div>
         </div>
 
