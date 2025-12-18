@@ -24,6 +24,7 @@ export default function AdminLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const [user, setUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -76,10 +77,21 @@ export default function AdminLayout({
     { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard', badge: null },
     { name: 'Form Builder', icon: FormInput, path: '/admin/form-builder', badge: null },
     { name: 'Submissions', icon: FileText, path: '/admin/submissions', badge: '12' },
+    { name: 'Groups', icon: Users, path: '/admin/groups', badge: null },
     { name: 'Users', icon: Users, path: '/admin/users', badge: null },
-    { name: 'Analytics', icon: BarChart3, path: '/admin/analytics', badge: null },
-    { name: 'Settings', icon: Settings, path: '/admin/settings', badge: null },
+    { name: 'Analytics', icon: BarChart3, path: '/admin/analytics', badge: null, children: [
+      { name: 'Overview', path: '/admin/analytics/overview' },
+      { name: 'Reports', path: '/admin/analytics/reports' },
+    ] },
+    { name: 'Settings', icon: Settings, path: '/admin/settings', badge: null, children: [
+      { name: 'General', path: '/admin/settings/general' },
+      { name: 'Permissions', path: '/admin/settings/permissions' },
+    ] },
   ];
+
+  const toggleExpand = (name: string) => {
+    setExpandedItems(prev => ({ ...prev, [name]: !prev[name] }));
+  };
 
   // Show login page without layout
   if (pathname === '/admin/login' || pathname === '/admin') {
@@ -102,7 +114,7 @@ export default function AdminLayout({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+              className="p-1.5 hover:bg-gray-100 rounded text-pink-700 transition-colors"
             >
               {sidebarOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
@@ -146,8 +158,8 @@ export default function AdminLayout({
       {/* Sidebar */}
       <aside
         className={`fixed left-0 top-12 bottom-0 bg-white border-r border-gray-200 transition-all duration-300 z-20 ${
-          sidebarOpen ? 'w-52' : 'w-0'
-        } overflow-hidden`}
+          sidebarOpen ? 'w-52' : 'w-14'
+        }`}
       >
         <nav className="p-2 space-y-0.5">
           {menuItems.map((item) => {
@@ -158,22 +170,22 @@ export default function AdminLayout({
               <button
                 key={item.path}
                 onClick={() => router.push(item.path)}
-                className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded transition-colors ${
+                className={`w-full flex items-center ${sidebarOpen ? 'justify-between px-3' : 'justify-center'} py-2 text-sm rounded transition-colors ${
                   isActive
                     ? 'bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 font-medium'
                     : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className={`flex items-center ${sidebarOpen ? 'gap-2' : ''}`}>
                   <Icon className="w-4 h-4" />
-                  <span>{item.name}</span>
+                  {sidebarOpen && <span>{item.name}</span>}
                 </div>
-                {item.badge && (
+                {sidebarOpen && item.badge && (
                   <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
                     {item.badge}
                   </span>
                 )}
-                {isActive && <ChevronRight className="w-3 h-3" />}
+                {sidebarOpen && isActive && <ChevronRight className="w-3 h-3" />}
               </button>
             );
           })}
@@ -183,7 +195,7 @@ export default function AdminLayout({
       {/* Main Content */}
       <main
         className={`pt-12 transition-all duration-300 ${
-          sidebarOpen ? 'ml-52' : 'ml-0'
+          sidebarOpen ? 'ml-52' : 'ml-14'
         }`}
       >
         <div className="p-4">
