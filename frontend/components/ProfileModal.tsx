@@ -11,6 +11,17 @@ interface ProfileModalProps {
 
 const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userName, onLogout }) => {
   if (!isOpen) return null;
+
+  const handleLogout = () => {
+    try {
+      onLogout && onLogout();
+    } finally {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+    }
+  };
+
   return (
     <div className="fixed top-6 right-2 z-50">
       <div className="bg-white rounded-lg shadow-lg p-4 w-56 max-w-full flex flex-col items-center border border-gray-200">
@@ -29,7 +40,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, userName, 
         )} */}
         <button
           className="w-full py-2 rounded bg-red-500 hover:bg-red-600 text-white font-medium mb-2"
-          onClick={onLogout}
+          onClick={handleLogout}
         >
           Logout
         </button>

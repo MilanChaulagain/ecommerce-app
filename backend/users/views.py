@@ -20,6 +20,12 @@ load_dotenv()
 def get_or_create_user(username, email, role='user'):
     user, _ = User.objects.get_or_create(username=username, defaults={'email': email})
     userrole, _ = UserRole.objects.get_or_create(user=user, defaults={'role': role})
+    # ensure profile exists
+    try:
+        _ = user.userprofile
+    except Exception:
+        from .models import UserProfile
+        UserProfile.objects.get_or_create(user=user)
     return user
 
 def generate_jwt(user):
@@ -273,12 +279,20 @@ class CurrentUserView(APIView):
             role = role_obj.role
         except UserRole.DoesNotExist:
             role = 'user'
-        
+        avatar = None
+        try:
+            prof = user.userprofile
+            if prof.avatar and hasattr(prof.avatar, 'url'):
+                avatar = request.build_absolute_uri(prof.avatar.url)
+        except Exception:
+            avatar = None
+
         return Response({
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'role': role,
+            'avatar': avatar,
         })
 
 
@@ -410,11 +424,19 @@ class UsersListView(APIView):
                 role = UserRole.objects.get(user=u).role
             except UserRole.DoesNotExist:
                 role = 'user'
+            avatar = None
+            try:
+                prof = getattr(u, 'userprofile', None)
+                if prof and prof.avatar and hasattr(prof.avatar, 'url'):
+                    avatar = request.build_absolute_uri(prof.avatar.url)
+            except Exception:
+                avatar = None
             data.append({
                 'id': u.id,
                 'username': u.username,
                 'email': u.email,
                 'role': role,
+                'avatar': avatar,
             })
         return Response({'count': len(data), 'results': data})
 
