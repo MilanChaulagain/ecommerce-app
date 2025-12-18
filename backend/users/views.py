@@ -10,12 +10,22 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import UserRole
 from .serializers import UserSerializer
+from rest_framework.permissions import IsAdminUser
+from rest_framework.decorators import permission_classes
+from rest_framework import generics
+from django.contrib.auth.models import User
 
 load_dotenv()
 
 def get_or_create_user(username, email, role='user'):
     user, _ = User.objects.get_or_create(username=username, defaults={'email': email})
     userrole, _ = UserRole.objects.get_or_create(user=user, defaults={'role': role})
+    # ensure profile exists
+    try:
+        _ = user.userprofile
+    except Exception:
+        from .models import UserProfile
+        UserProfile.objects.get_or_create(user=user)
     return user
 
 def generate_jwt(user):
@@ -269,12 +279,20 @@ class CurrentUserView(APIView):
             role = role_obj.role
         except UserRole.DoesNotExist:
             role = 'user'
-        
+        avatar = None
+        try:
+            prof = user.userprofile
+            if prof.avatar and hasattr(prof.avatar, 'url'):
+                avatar = request.build_absolute_uri(prof.avatar.url)
+        except Exception:
+            avatar = None
+
         return Response({
             'id': user.id,
             'username': user.username,
             'email': user.email,
             'role': role,
+            'avatar': avatar,
         })
 
 
@@ -392,3 +410,118 @@ class EmailTokenObtainPairView(APIView):
                 'role': role,
             }
         })
+
+
+class UsersListView(APIView):
+    """List all users (admin only)"""
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        users = User.objects.all().select_related()
+        data = []
+        for u in users:
+            try:
+                role = UserRole.objects.get(user=u).role
+            except UserRole.DoesNotExist:
+                role = 'user'
+            avatar = None
+            try:
+                prof = getattr(u, 'userprofile', None)
+                if prof and prof.avatar and hasattr(prof.avatar, 'url'):
+                    avatar = request.build_absolute_uri(prof.avatar.url)
+            except Exception:
+                avatar = None
+            data.append({
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'role': role,
+                'avatar': avatar,
+            })
+        return Response({'count': len(data), 'results': data})
+
+
+class SetUserRoleView(APIView):
+    """Set a user's role (admin only)"""
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, user_id):
+        role = request.data.get('role')
+        if role not in dict(UserRole.ROLE_CHOICES):
+            return Response({'error': 'Invalid role'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        userrole, _ = UserRole.objects.get_or_create(user=user)
+        userrole.role = role
+        userrole.save()
+        return Response({'message': 'Role updated', 'user': {'id': user.id, 'username': user.username, 'role': userrole.role}})
+
+
+# --- PagePermission API (admin / superemployee) ---
+from .models import PagePermission
+from .serializers import PagePermissionSerializer
+from rest_framework.permissions import BasePermission
+
+
+class IsAdminOrSuperEmployee(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        try:
+            role = user.userrole.role
+        except Exception:
+            role = 'user'
+        return role in ['admin', 'superemployee']
+
+
+class PagePermissionListCreateView(APIView):
+    permission_classes = [IsAdminOrSuperEmployee]
+
+    def get(self, request):
+        perms = PagePermission.objects.all()
+        serializer = PagePermissionSerializer(perms, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = PagePermissionSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            perm = serializer.save()
+            return Response(PagePermissionSerializer(perm, context={'request': request}).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PagePermissionDetailView(APIView):
+    permission_classes = [IsAdminOrSuperEmployee]
+
+    def get_object(self, pk):
+        try:
+            return PagePermission.objects.get(pk=pk)
+        except PagePermission.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        perm = self.get_object(pk)
+        if not perm:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PagePermissionSerializer(perm, context={'request': request}).data)
+
+    def put(self, request, pk):
+        perm = self.get_object(pk)
+        if not perm:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = PagePermissionSerializer(perm, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        perm = self.get_object(pk)
+        if not perm:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        perm.delete()
+        return Response({'message': 'Deleted'})

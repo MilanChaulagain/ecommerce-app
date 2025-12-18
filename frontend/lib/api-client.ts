@@ -171,9 +171,7 @@ async function request<T>(
 ): Promise<T> {
   const { requireAuth = false, ...fetchOptions } = options;
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
 
   // Merge existing headers if any
   if (fetchOptions.headers) {
@@ -185,6 +183,17 @@ async function request<T>(
     const token = TokenManager.getAccessToken();
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  // If body is FormData, let the browser set Content-Type (including boundary)
+  const bodyIsFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
+  if (!bodyIsFormData) {
+    headers['Content-Type'] = 'application/json';
+  } else {
+    // When sending files we might be using session/cookie auth in some setups — include credentials
+    if (requireAuth && !('credentials' in fetchOptions)) {
+      fetchOptions.credentials = 'include';
     }
   }
 
@@ -386,6 +395,14 @@ export const formsAPI = {
   },
 
   /**
+   * Delete form by slug (SuperEmployee / admin only)
+   * Backend endpoint: DELETE /api/forms/{slug}/
+   */
+  async deleteForm(slug: string): Promise<void> {
+    return request<void>(`/api/forms/${slug}/`, { method: 'DELETE', requireAuth: true });
+  },
+
+  /**
    * Get form submissions
    * Backend endpoint: GET /api/forms/{slug}/submissions/
    */
@@ -459,12 +476,153 @@ export const submissionsAPI = {
   },
 };
 
-// ==================== Export Default Client ====================
+// ==================== Groups & Dashboard API ====================
+export const groupsAPI = {
+  async listGroups() {
+    // backend exposes roles as Role model under /api/user/roles/
+    return request<any>('/api/user/roles/', { requireAuth: true });
+  },
+  async createGroup(payload: { name: string; description?: string }) {
+    return request<any>('/api/user/roles/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async getGroup(id: number) {
+    return request<any>(`/api/user/roles/${id}/`, { requireAuth: true });
+  },
+  async updateGroup(id: number, payload: any) {
+    return request<any>(`/api/user/roles/${id}/`, { method: 'PUT', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async deleteGroup(id: number) {
+    return request<any>(`/api/user/roles/${id}/`, { method: 'DELETE', requireAuth: true });
+  },
+  async listMembers(groupId: number) {
+    // Backend doesn't expose a direct role->members endpoint; fetch users and filter by role membership
+    const users = await request<any>('/api/user/users/', { requireAuth: true });
+    const list = Array.isArray(users) ? users : (users.results ?? users);
+    return list.filter((u: any) => Array.isArray(u.groups) && u.groups.some((g: any) => Number(g.id ?? g.pk) === Number(groupId)));
+  },
+  async addMember(groupId: number, userId: number) {
+    // Use UserViewSet.assign_roles to add this role to the user's role set
+    // Fetch user's current roles
+    const user = await request<any>(`/api/user/users/${userId}/`, { requireAuth: true });
+    const current = Array.isArray(user.groups) ? user.groups.map((g: any) => Number(g.id ?? g.pk)) : [];
+    if (!current.includes(Number(groupId))) current.push(Number(groupId));
+    return request<any>(`/api/user/users/${userId}/assign_roles/`, { method: 'POST', body: JSON.stringify({ roles: current }), requireAuth: true });
+  },
+  async removeMember(groupId: number, userId: number) {
+    // Remove the role id from the user's roles using assign_roles
+    const user = await request<any>(`/api/user/users/${userId}/`, { requireAuth: true });
+    const current = Array.isArray(user.groups) ? user.groups.map((g: any) => Number(g.id ?? g.pk)) : [];
+    const remaining = current.filter((id) => id !== Number(groupId));
+    return request<any>(`/api/user/users/${userId}/assign_roles/`, { method: 'POST', body: JSON.stringify({ roles: remaining }), requireAuth: true });
+  },
+};
 
-const apiClient = {
+export const dashboardAPI = {
+  async getDashboard() {
+    return request<any>('/api/user/dashboard/', { requireAuth: true });
+  },
+  async saveDashboard(config: any) {
+    return request<any>('/api/user/dashboard/', { method: 'POST', body: JSON.stringify({ config }), requireAuth: true });
+  }
+};
+
+// ==================== User API (profile / home) ====================
+
+export const userAPI = {
+  async getHome() {
+    return request<any>('/api/user/home/', { requireAuth: true });
+  },
+  async getProfileForm() {
+    return request<any>('/api/user/profile-form/', { requireAuth: true });
+  },
+  async viewProfile(userId?: number) {
+    let url = '/api/user/profile/view/';
+    if (typeof userId !== 'undefined' && userId !== null) url += `?user_id=${userId}`;
+    return request<any>(url, { requireAuth: true });
+  },
+  async createProfileField(payload: { label: string; id?: string; type?: string; required?: boolean; options?: string[]; placeholder?: string; help_text?: string; order?: number }) {
+    // Backend expects field_type (not type) and choices as a comma-separated string
+    const body: any = {
+      label: payload.label,
+      field_type: payload.type ?? 'text',
+      required: !!payload.required,
+    };
+    if (payload.id) body.label = payload.id ? payload.label : payload.label;
+    if (payload.placeholder) body.placeholder = payload.placeholder;
+    if (payload.help_text) body.help_text = payload.help_text;
+    if (typeof payload.order !== 'undefined') body.order = Number(payload.order);
+    if (Array.isArray(payload.options) && payload.options.length > 0) body.choices = payload.options.join(',');
+
+    return request<any>('/api/user/profile-fields/', { method: 'POST', body: JSON.stringify(body), requireAuth: true });
+  },
+  async saveProfile(payload: any) {
+    // Support FormData when files are present. Backend expects { data: [{ field, value }] }
+    if (typeof FormData !== 'undefined' && payload instanceof FormData) {
+      return request<any>('/api/user/profile/save/', { method: 'POST', body: payload, requireAuth: true });
+    }
+
+    let body: any = payload;
+    if (payload && typeof payload === 'object' && payload.values) {
+      const values = payload.values as Record<string, any>;
+      body = { data: Object.keys(values).map((k) => ({ field: Number(k), value: values[k] })) };
+    }
+    return request<any>('/api/user/profile/save/', { method: 'POST', body: JSON.stringify(body), requireAuth: true });
+  },
+
+  async uploadProfilePicture(file: File) {
+    const fd = new FormData();
+    fd.append('profile_picture', file);
+    return request<any>('/api/user/profile/upload/', { method: 'POST', body: fd, requireAuth: true });
+  },
+  // Page permissions (admin / superemployee)
+  async listPagePermissions(): Promise<any[]> {
+    return request<any[]>('/api/users/page-permissions/', { requireAuth: true });
+  },
+  async createPagePermission(payload: any) {
+    return request<any>('/api/users/page-permissions/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async getPagePermission(id: number) {
+    return request<any>(`/api/users/page-permissions/${id}/`, { requireAuth: true });
+  },
+  async updatePagePermission(id: number, payload: any) {
+    return request<any>(`/api/users/page-permissions/${id}/`, { method: 'PUT', body: JSON.stringify(payload), requireAuth: true });
+  },
+  async deletePagePermission(id: number) {
+    return request<any>(`/api/users/page-permissions/${id}/`, { method: 'DELETE', requireAuth: true });
+  },
+};
+
+export const usersAPI = {
+  async listUsers() {
+    return request<any>('/api/users/', { requireAuth: true });
+  },
+  async setRole(userId: number, role: string) {
+    return request<any>(`/api/users/${userId}/role/`, { method: 'POST', body: JSON.stringify({ role }), requireAuth: true });
+  }
+};
+
+// ==================== Groups & Dashboard API (already defined above) ====================
+// groupsAPI and dashboardAPI are defined earlier in this file
+
+// ==================== Typed API Client Export ====================
+export interface ApiClient {
+  auth: typeof authAPI;
+  forms: typeof formsAPI;
+  submissions: typeof submissionsAPI;
+  groups: typeof groupsAPI;
+  dashboard: typeof dashboardAPI;
+  user: typeof userAPI;
+  users: typeof usersAPI;
+}
+
+const apiClient: ApiClient = {
   auth: authAPI,
   forms: formsAPI,
   submissions: submissionsAPI,
+  groups: groupsAPI,
+  dashboard: dashboardAPI,
+  user: userAPI,
+  users: usersAPI,
 };
 
 export default apiClient;

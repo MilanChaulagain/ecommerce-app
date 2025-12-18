@@ -13,6 +13,7 @@ urlpatterns = [
     # Profile Form & Data
     path('profile-form/', views.profile_form, name='profile_form'),
     path('profile/save/', views.save_profile, name='save_profile'),
+    path('profile/upload/', views.upload_profile_picture, name='upload_profile_picture'),
     path('profile/view/', views.view_profile, name='view_profile'),
     path('profile/value/<int:value_id>/', views.delete_profile_value, name='delete_profile_value'),
 ]

@@ -45,12 +45,61 @@ def user_home(request):
     if fields_count > 0:
         completion = int((values_count / fields_count) * 100)
     
+    avatar = None
+    try:
+        prof = getattr(user, 'userprofile', None)
+        if prof and prof.avatar and hasattr(prof.avatar, 'url'):
+            avatar = request.build_absolute_uri(prof.avatar.url)
+    except Exception:
+        avatar = None
+
+    # Prepare a small profile preview (first 3 values ordered by field order)
+    preview_values = []
+    values_qs = ProfileValue.objects.filter(user=user).select_related('field').order_by('field__order')[:3]
+    for v in values_qs:
+        preview_values.append({
+            'field_id': v.field.id,
+            'field_label': v.field.label,
+            'value': v.value,
+        })
+
+    # Required fields that have no value yet
+    required_missing = []
+    required_fields = ProfileField.objects.filter(user=user, required=True)
+    existing_field_ids = set(ProfileValue.objects.filter(user=user).values_list('field_id', flat=True))
+    for f in required_fields:
+        if f.id not in existing_field_ids:
+            required_missing.append({ 'id': f.id, 'label': f.label })
+
+    # Suggestions to encourage profile completion
+    suggestions = []
+    if not avatar:
+        suggestions.append({ 'code': 'upload_avatar', 'label': 'Upload profile picture' })
+    if required_missing:
+        suggestions.append({ 'code': 'complete_required_fields', 'label': 'Complete required profile fields' })
+    if completion < 100:
+        suggestions.append({ 'code': 'improve_completion', 'label': 'Improve your profile completion' })
+
+    # Determine role: prefer explicit user.role, else derive from first group membership
+    role_val = getattr(user, 'role', None)
+    groups_list = []
+    try:
+        groups_qs = user.groups.all()
+        groups_list = [ { 'id': g.id, 'name': g.name } for g in groups_qs ]
+        if not role_val and groups_list:
+            # pick first group's name as role fallback
+            role_val = groups_list[0]['name']
+    except Exception:
+        groups_list = []
+
     return Response({
         "user": {
             "id": user.id,
             "email": user.email,
             "username": getattr(user, 'username', ''),
-            "role": getattr(user, 'role', 'user')
+            "role": role_val or 'user',
+            "avatar": avatar,
+            "groups": groups_list,
         },
         "stats": {
             "fields_count": fields_count,
@@ -58,7 +107,10 @@ def user_home(request):
             "has_profile_fields": fields_count > 0,
             "has_profile_data": values_count > 0,
             "completion_percentage": completion
-        }
+        },
+        "profile_preview": preview_values,
+        "missing_required_fields": required_missing,
+        "suggestions": suggestions,
     })
 
 
@@ -227,7 +279,17 @@ def save_profile(request):
         "data": [...]
     }
     """
-    serializer = BulkProfileSaveSerializer(data=request.data, context={'request': request})
+    # Support multipart/form-data with file uploads
+    data = request.data.copy() if hasattr(request, 'data') else request.data
+    # If a FormData 'data' field is present and is a JSON string, parse it
+    if 'data' in data and isinstance(data['data'], str):
+        try:
+            import json
+            data = {'data': json.loads(data['data'])}
+        except Exception:
+            pass
+
+    serializer = BulkProfileSaveSerializer(data=data, context={'request': request})
     
     if not serializer.is_valid():
         return Response(
@@ -285,14 +347,35 @@ def save_profile(request):
     })
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_profile_picture(request):
+    """Endpoint to accept profile picture and save to user profile"""
+    if 'profile_picture' not in request.FILES:
+        return Response({'error': 'No file uploaded'}, status=status.HTTP_400_BAD_REQUEST)
+    pic = request.FILES['profile_picture']
+    try:
+        prof = getattr(request.user, 'userprofile', None)
+        if not prof:
+            from users.models import UserProfile
+            prof, _ = UserProfile.objects.get_or_create(user=request.user)
+        prof.avatar.save(pic.name, pic)
+        prof.save()
+        avatar_url = request.build_absolute_uri(prof.avatar.url) if prof.avatar else None
+        return Response({'message': 'Uploaded', 'avatar': avatar_url})
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def view_profile(request):
     """
     GET /api/user/profile/view/
-    
-    View all profile data for the current user
-    
+
+    View all profile data for the current user.
+    Admins may pass ?user_id=<id> to view another user's profile if they have staff privileges.
+
     Response:
     {
         "count": 3,
@@ -308,8 +391,23 @@ def view_profile(request):
         ]
     }
     """
-    values = ProfileValue.objects.filter(user=request.user).select_related('field').order_by('field__order')
-    
+    # Allow admins (staff) to view other users' profiles by passing ?user_id=<id>
+    user = request.user
+    target_user = user
+    user_id = request.query_params.get('user_id') if hasattr(request, 'query_params') else request.GET.get('user_id')
+    if user_id:
+        # Only allow staff/admin users to view other users' data
+        if not user.is_staff:
+            return Response({"message": "Permission denied"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            from django.contrib.auth import get_user_model
+            UserModel = get_user_model()
+            target_user = UserModel.objects.get(id=int(user_id))
+        except Exception:
+            return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    values = ProfileValue.objects.filter(user=target_user).select_related('field').order_by('field__order')
+
     if not values.exists():
         return Response(
             {
@@ -317,9 +415,9 @@ def view_profile(request):
                 "count": 0,
                 "data": []
             },
-            status=status.HTTP_404_NOT_FOUND
+            status=status.HTTP_200_OK
         )
-    
+
     serializer = ProfileValueSerializer(values, many=True)
     return Response({
         "count": values.count(),
