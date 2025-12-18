@@ -76,6 +76,7 @@ export default function AdminLayout({
     { name: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard', badge: null },
     { name: 'Form Builder', icon: FormInput, path: '/admin/form-builder', badge: null },
     { name: 'Submissions', icon: FileText, path: '/admin/submissions', badge: '12' },
+    { name: 'Groups', icon: Users, path: '/admin/groups', badge: null },
     { name: 'Users', icon: Users, path: '/admin/users', badge: null },
     { name: 'Analytics', icon: BarChart3, path: '/admin/analytics', badge: null },
     { name: 'Settings', icon: Settings, path: '/admin/settings', badge: null },
