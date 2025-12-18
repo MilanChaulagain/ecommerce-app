@@ -34,3 +34,24 @@ class UserProfile(models.Model):
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.get_or_create(user=instance)
+
+
+class PagePermission(models.Model):
+    """Define page access rules by path, role list and per-user overrides."""
+    name = models.CharField(max_length=150)
+    path = models.CharField(max_length=300, help_text='URL path to match (prefix or exact)')
+    prefix = models.BooleanField(default=True, help_text='If true, match path prefix')
+    # store allowed roles as comma separated values (e.g. 'admin,superemployee')
+    allowed_roles = models.CharField(max_length=200, blank=True, default='')
+    allowed_users = models.ManyToManyField(User, blank=True, related_name='page_permissions')
+    active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def allowed_roles_list(self):
+        if not self.allowed_roles:
+            return []
+        return [r.strip() for r in self.allowed_roles.split(',') if r.strip()]
+
+    def __str__(self):
+        return f"{self.name} -> {self.path} ({'prefix' if self.prefix else 'exact'})"

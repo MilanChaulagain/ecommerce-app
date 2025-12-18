@@ -53,13 +53,53 @@ def user_home(request):
     except Exception:
         avatar = None
 
+    # Prepare a small profile preview (first 3 values ordered by field order)
+    preview_values = []
+    values_qs = ProfileValue.objects.filter(user=user).select_related('field').order_by('field__order')[:3]
+    for v in values_qs:
+        preview_values.append({
+            'field_id': v.field.id,
+            'field_label': v.field.label,
+            'value': v.value,
+        })
+
+    # Required fields that have no value yet
+    required_missing = []
+    required_fields = ProfileField.objects.filter(user=user, required=True)
+    existing_field_ids = set(ProfileValue.objects.filter(user=user).values_list('field_id', flat=True))
+    for f in required_fields:
+        if f.id not in existing_field_ids:
+            required_missing.append({ 'id': f.id, 'label': f.label })
+
+    # Suggestions to encourage profile completion
+    suggestions = []
+    if not avatar:
+        suggestions.append({ 'code': 'upload_avatar', 'label': 'Upload profile picture' })
+    if required_missing:
+        suggestions.append({ 'code': 'complete_required_fields', 'label': 'Complete required profile fields' })
+    if completion < 100:
+        suggestions.append({ 'code': 'improve_completion', 'label': 'Improve your profile completion' })
+
+    # Determine role: prefer explicit user.role, else derive from first group membership
+    role_val = getattr(user, 'role', None)
+    groups_list = []
+    try:
+        groups_qs = user.groups.all()
+        groups_list = [ { 'id': g.id, 'name': g.name } for g in groups_qs ]
+        if not role_val and groups_list:
+            # pick first group's name as role fallback
+            role_val = groups_list[0]['name']
+    except Exception:
+        groups_list = []
+
     return Response({
         "user": {
             "id": user.id,
             "email": user.email,
             "username": getattr(user, 'username', ''),
-            "role": getattr(user, 'role', 'user'),
+            "role": role_val or 'user',
             "avatar": avatar,
+            "groups": groups_list,
         },
         "stats": {
             "fields_count": fields_count,
@@ -67,7 +107,10 @@ def user_home(request):
             "has_profile_fields": fields_count > 0,
             "has_profile_data": values_count > 0,
             "completion_percentage": completion
-        }
+        },
+        "profile_preview": preview_values,
+        "missing_required_fields": required_missing,
+        "suggestions": suggestions,
     })
 
 

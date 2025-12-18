@@ -458,3 +458,70 @@ class SetUserRoleView(APIView):
         userrole.role = role
         userrole.save()
         return Response({'message': 'Role updated', 'user': {'id': user.id, 'username': user.username, 'role': userrole.role}})
+
+
+# --- PagePermission API (admin / superemployee) ---
+from .models import PagePermission
+from .serializers import PagePermissionSerializer
+from rest_framework.permissions import BasePermission
+
+
+class IsAdminOrSuperEmployee(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        try:
+            role = user.userrole.role
+        except Exception:
+            role = 'user'
+        return role in ['admin', 'superemployee']
+
+
+class PagePermissionListCreateView(APIView):
+    permission_classes = [IsAdminOrSuperEmployee]
+
+    def get(self, request):
+        perms = PagePermission.objects.all()
+        serializer = PagePermissionSerializer(perms, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = PagePermissionSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            perm = serializer.save()
+            return Response(PagePermissionSerializer(perm, context={'request': request}).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PagePermissionDetailView(APIView):
+    permission_classes = [IsAdminOrSuperEmployee]
+
+    def get_object(self, pk):
+        try:
+            return PagePermission.objects.get(pk=pk)
+        except PagePermission.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        perm = self.get_object(pk)
+        if not perm:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(PagePermissionSerializer(perm, context={'request': request}).data)
+
+    def put(self, request, pk):
+        perm = self.get_object(pk)
+        if not perm:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = PagePermissionSerializer(perm, data=request.data, partial=True, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        perm = self.get_object(pk)
+        if not perm:
+            return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+        perm.delete()
+        return Response({'message': 'Deleted'})

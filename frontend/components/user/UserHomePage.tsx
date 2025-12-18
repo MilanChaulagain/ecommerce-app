@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import apiClient from '@/lib/api-client';
 import ProfileForm from './ProfileForm';
@@ -17,6 +17,9 @@ export default function UserHomePage() {
 	const [showProfileForm, setShowProfileForm] = useState<boolean>(false);
 	const [profileLoading, setProfileLoading] = useState<boolean>(false);
 	const [profileError, setProfileError] = useState<string | null>(null);
+	const [uploadingAvatar, setUploadingAvatar] = useState<boolean>(false);
+	const avatarInputRef = useRef<HTMLInputElement | null>(null);
+	const [focusFieldId, setFocusFieldId] = useState<number | null>(null);
 
 	const loadProfile = async () => {
 		setProfileLoading(true);
@@ -36,6 +39,8 @@ export default function UserHomePage() {
 		setLoading(true);
 		try {
 			const data = await apiClient.user.getHome();
+			// Debug: log the raw payload to help diagnose role issues
+			if (typeof window !== 'undefined') console.debug('[UserHome] /api/user/home response:', data);
 			setSummary(data);
 			// Load profile values for current user
 			await loadProfile();
@@ -44,6 +49,27 @@ export default function UserHomePage() {
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const handleAvatarSelect = async (file: File | null) => {
+		if (!file) return;
+		setUploadingAvatar(true);
+		try {
+			const res = await apiClient.user.uploadProfilePicture(file);
+			const avatarUrl = res?.avatar || res?.data?.avatar || null;
+			setSummary((s: any) => ({ ...s, user: { ...s.user, avatar: avatarUrl } }));
+			// refresh profile preview
+			try { await loadProfile(); } catch {}
+		} catch (e) {
+			console.error('Failed to upload avatar', e);
+		} finally {
+			setUploadingAvatar(false);
+		}
+	};
+
+	const onMissingFieldComplete = (fieldId: number) => {
+		setFocusFieldId(fieldId);
+		setShowProfileForm(true);
 	};
 
 	useEffect(() => {
@@ -69,7 +95,9 @@ export default function UserHomePage() {
 
 	if (loading) return <div>Loading…</div>;
 
-	const role = (summary?.user?.role || 'user').toLowerCase();
+	// Resolve role from multiple possible sources (backwards-compatible fallbacks)
+	const rawRole = summary?.user?.role ?? summary?.user?.role_name ?? (Array.isArray(summary?.user?.groups) ? (summary?.user?.groups[0]?.name ?? null) : null) ?? 'user';
+	const role = String(rawRole || 'user').toLowerCase();
 
 	return (
 		<div className="max-w-7xl mx-auto px-4">
@@ -89,8 +117,29 @@ export default function UserHomePage() {
 								<button onClick={() => setShowProfileForm(true)} className="bg-white/90 text-indigo-700 px-3 py-2 rounded-md shadow-sm text-sm font-medium">Add details</button>
 							</div>
 							<div className="mt-3 flex items-center gap-3">
-								<motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.4 }} className="bg-white/20 text-white rounded-full px-3 py-1 text-xs font-semibold">{(summary?.user?.role || 'user').toUpperCase()}</motion.div>
+								<motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ duration: 0.4 }} className="bg-white/20 text-white rounded-full px-3 py-1 text-xs font-semibold">{String(rawRole || 'user').toUpperCase()}</motion.div>
 								<div className="text-white/90 text-sm">Profile completion: <strong className="font-semibold">{summary?.stats?.completion_percentage ?? 0}%</strong></div>
+
+						{/* Small preview (mobile) */}
+						{summary?.profile_preview && summary.profile_preview.length > 0 && (
+							<div className="mt-3 flex gap-3">
+								{summary.profile_preview.map((p: any) => (
+									<div key={p.field_id} className="bg-white/10 px-3 py-1 rounded text-sm text-white max-w-xs">
+										<div className="font-semibold text-sm">{p.field_label}</div>
+										<div className="text-xs text-white/80 truncate">{p.value}</div>
+									</div>
+								))}
+							</div>
+						)}
+
+						{/* Suggestions (mobile) */}
+						{summary?.suggestions && summary.suggestions.length > 0 && (
+							<div className="mt-3 flex gap-2">
+								{summary.suggestions.map((s: any) => (
+									<button key={s.code} onClick={() => { if (s.code === 'upload_avatar') avatarInputRef?.current?.click(); else setShowProfileForm(true); }} className="px-3 py-1 bg-white/20 text-white rounded text-xs">{s.label}</button>
+								))}
+							</div>
+						)}
 							</div>
 						</div>
 					</motion.header>
@@ -132,12 +181,12 @@ export default function UserHomePage() {
 						{showProfileForm && (
 							<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end">
 								{/* backdrop */}
-								<motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0 bg-black" onClick={() => setShowProfileForm(false)} />
+								<motion.div initial={{ opacity: 0 }} animate={{ opacity: 0.6 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0 bg-black" onClick={() => { setShowProfileForm(false); setFocusFieldId(null); }} />
 								{/* panel */}
 								<motion.div initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 28 }} className="relative w-full bg-white rounded-t-xl p-4 shadow-xl">
 									<div className="flex items-center justify-between">
 										<div className="text-lg font-semibold">Complete your profile</div>
-										<button onClick={() => setShowProfileForm(false)} className="text-sm text-gray-600">Close</button>
+										<button onClick={() => { setShowProfileForm(false); setFocusFieldId(null); }} className="text-sm text-gray-600">Close</button>
 									</div>
 									<div className="mt-3">
 										<ProfileForm onSaved={() => { load(); setShowProfileForm(false); }} />
@@ -153,7 +202,20 @@ export default function UserHomePage() {
 			)}
 			{/* Top user summary and CTA */}
 			<div className="bg-white border border-gray-100 rounded-lg p-6 shadow-sm mb-6 flex items-center gap-6">
-				<div className="w-16 h-16 rounded-full bg-pink-600 ring-4 ring-pink-50 flex items-center justify-center text-white text-xl font-semibold">{String(summary?.user?.username ?? summary?.user?.email ?? 'U').charAt(0).toUpperCase()}</div>
+				<div className="relative">
+				<div className="w-16 h-16 rounded-full overflow-hidden bg-pink-600 ring-4 ring-pink-50 flex items-center justify-center text-white text-xl font-semibold">
+					{summary?.user?.avatar ? (
+						// eslint-disable-next-line @next/next/no-img-element
+						<img src={summary.user.avatar} alt="avatar" className="w-full h-full object-cover" />
+					) : (
+						<div>{String(summary?.user?.username ?? summary?.user?.email ?? 'U').charAt(0).toUpperCase()}</div>
+					)}
+				</div>
+				<div className="absolute -bottom-1 -right-1">
+					<button onClick={() => avatarInputRef?.current?.click()} className="bg-white text-indigo-700 rounded-full p-1 text-xs shadow-sm">Change</button>
+				</div>
+				<input ref={(el) => (avatarInputRef.current = el)} type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; if (f) handleAvatarSelect(f); }} className="hidden" />
+			</div>
 				<div className="flex-1 min-w-0">
 					<div className="flex items-center justify-between gap-4">
 						<div className="min-w-0">
@@ -161,7 +223,7 @@ export default function UserHomePage() {
 							<div className="text-sm text-gray-500 truncate">{summary?.user?.email}</div>
 						</div>
 						<div>
-							<span className="inline-flex items-center px-3 py-1 rounded-full bg-pink-50 text-pink-700 text-xs font-medium uppercase">{(summary?.user?.role || 'user')}</span>
+							<span className="inline-flex items-center px-3 py-1 rounded-full bg-pink-50 text-pink-700 text-xs font-medium uppercase">{String(rawRole || 'user').toUpperCase()}</span>
 						</div>
 					</div>
 					<div className="mt-2 text-sm text-gray-600">Profile completion: <strong className="text-gray-800">{summary?.stats?.completion_percentage ?? 0}%</strong></div>
@@ -241,11 +303,11 @@ export default function UserHomePage() {
 				</div>
 			)}
 
-			{/* Role-based home components */}
+			{/* Role-based home components
 			{role === 'admin' && <AdminHome summary={summary} />}
 			{role === 'employee' && <EmployeeHome summary={summary} onProfileSaved={load} />}
 			{role === 'user' && <CustomerHome summary={summary} onProfileSaved={load} />}
-			{role === 'customer' && <CustomerHome summary={summary} onProfileSaved={load} />}
+			{role === 'customer' && <CustomerHome summary={summary} onProfileSaved={load} />} */}
 
 			{/* Fallback for any other role: show message and button to open the profile editor */}
 			{!['admin','employee','user','customer'].includes(role) && (
