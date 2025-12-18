@@ -522,8 +522,25 @@ export const userAPI = {
   async getProfileForm() {
     return request<any>('/api/user/profile-form/', { requireAuth: true });
   },
-  async createProfileField(payload: { label: string; id?: string; type: string; required?: boolean; options?: string[] }) {
-    return request<any>('/api/user/profile-fields/', { method: 'POST', body: JSON.stringify(payload), requireAuth: true });
+  async viewProfile(userId?: number) {
+    let url = '/api/user/profile/view/';
+    if (typeof userId !== 'undefined' && userId !== null) url += `?user_id=${userId}`;
+    return request<any>(url, { requireAuth: true });
+  },
+  async createProfileField(payload: { label: string; id?: string; type?: string; required?: boolean; options?: string[]; placeholder?: string; help_text?: string; order?: number }) {
+    // Backend expects field_type (not type) and choices as a comma-separated string
+    const body: any = {
+      label: payload.label,
+      field_type: payload.type ?? 'text',
+      required: !!payload.required,
+    };
+    if (payload.id) body.label = payload.id ? payload.label : payload.label;
+    if (payload.placeholder) body.placeholder = payload.placeholder;
+    if (payload.help_text) body.help_text = payload.help_text;
+    if (typeof payload.order !== 'undefined') body.order = Number(payload.order);
+    if (Array.isArray(payload.options) && payload.options.length > 0) body.choices = payload.options.join(',');
+
+    return request<any>('/api/user/profile-fields/', { method: 'POST', body: JSON.stringify(body), requireAuth: true });
   },
   async saveProfile(payload: any) {
     // Support FormData when files are present. Backend expects { data: [{ field, value }] }
