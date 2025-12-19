@@ -26,9 +26,22 @@ export default function AdminLogin() {
       // Role-based access check
       const allowedRoles = ['admin', 'superemployee', 'employee'];
       if (!allowedRoles.includes(response.user.role)) {
-        setError('Access denied. Only admin, superemployee, or employee can access the admin dashboard.');
-        apiClient.auth.logout();
+        // Save as a regular user (non-admin) so the site can continue
+        if (typeof window !== 'undefined') {
+          // store general access tokens and user profile under general keys
+          localStorage.setItem('access_token', response.access);
+          if (response.refresh) localStorage.setItem('refresh_token', response.refresh);
+          try { localStorage.setItem('user', JSON.stringify(response.user)); } catch {}
+        }
+
+        setError('Access denied. Only admin, superemployee, or employee can access the admin dashboard. Redirecting to site...');
         setLoading(false);
+
+        // Give user a moment to read the message, then navigate to landing
+        setTimeout(() => {
+          router.push('/');
+        }, 1600);
+
         return;
       }
 
