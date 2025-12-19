@@ -99,7 +99,7 @@ export class TokenManager {
 
   static getAccessToken(): string | null {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem(this.ACCESS_TOKEN_KEY);
+      return localStorage.getItem(this.ACCESS_TOKEN_KEY) || localStorage.getItem('admin_token');
     }
     return null;
   }
@@ -128,7 +128,14 @@ export class TokenManager {
   static getUser(): User | null {
     if (typeof window !== 'undefined') {
       const userStr = localStorage.getItem(this.USER_KEY);
-      return userStr ? JSON.parse(userStr) : null;
+      if (userStr) return JSON.parse(userStr);
+      // Fallback for admin login flow which stores username separately
+      const adminUsername = localStorage.getItem('admin_username');
+      if (adminUsername) {
+        // Return a minimal User object when full user details are not available
+        return { id: -1, username: adminUsername, email: `${adminUsername}@unknown`, role: 'user' } as User;
+      }
+      return null;
     }
     return null;
   }
