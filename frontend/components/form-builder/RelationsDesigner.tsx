@@ -20,16 +20,21 @@ export default function RelationsDesigner({
   removeRelationship,
 }: RelationsDesignerProps) {
   const [forms, setForms] = useState<FormSchema[]>([]);
+  const [sourceFormSlug, setSourceFormSlug] = useState<string | null>(null);
+  const [sourceFields, setSourceFields] = useState<{ id: string; label: string }[]>([]);
   const [targetFormSlug, setTargetFormSlug] = useState<string | null>(null);
   const [targetFields, setTargetFields] = useState<{ id: string; label: string }[]>([]);
   const [selectedSourceField, setSelectedSourceField] = useState<string | null>(null);
   const [selectedTargetField, setSelectedTargetField] = useState<string | null>(null);
+  const [persistTo, setPersistTo] = useState<'current' | 'source' | 'target'>('current');
 
   useEffect(() => {
     const load = async () => {
       try {
         const list = await apiClient.forms.listForms();
         setForms(list);
+        // default source = current form when available
+        if (list && list.length && currentFormSlug) setSourceFormSlug(currentFormSlug);
       } catch (err) {
         console.error('Failed to load forms for relations', err);
       }
@@ -56,42 +61,175 @@ export default function RelationsDesigner({
     })();
   }, [targetFormSlug]);
 
+  useEffect(() => {
+    if (!sourceFormSlug) {
+      setSourceFields([]);
+      setSelectedSourceField(null);
+      return;
+    }
+    (async () => {
+      try {
+        // If the selected source is the current form, use currentFields prop when present
+        if (sourceFormSlug === currentFormSlug && currentFields && currentFields.length) {
+          const fs = currentFields.map(f => ({ id: f.id, label: f.label || f.name }));
+          setSourceFields(fs);
+          return;
+        }
+
+        const form = await apiClient.forms.getForm(sourceFormSlug!);
+        const primary = form.language_config?.primary || 'en';
+        const fs = form.fields_structure.map(f => ({ id: f.id, label: f.labels?.[primary] || Object.values(f.labels || {})[0] || f.id }));
+        setSourceFields(fs);
+      } catch (err) {
+        console.error('Failed to load source form fields', err);
+        setSourceFields([]);
+      }
+    })();
+  }, [sourceFormSlug, currentFormSlug, currentFields]);
+
+  // Ensure the form payload used for PUT matches backend expectations.
+  // - ensure language_config.primary exists
+  // - ensure fields_structure is an array and each field has id, type, labels (labels is an object)
+  const sanitizeFormForUpdate = (form: any) => {
+    const language_config = (form && form.language_config && typeof form.language_config === 'object') ? { ...form.language_config } : {};
+    if (!language_config.primary) language_config.primary = 'en';
+
+    const rawFields = Array.isArray(form?.fields_structure) ? form.fields_structure : [];
+    const fields_structure = rawFields.map((f: any) => {
+      const id = f?.id || f?.field_id || f?.name || f?.key || '';
+      const type = f?.type || 'text';
+      let labels = f?.labels;
+      if (!labels || typeof labels !== 'object') {
+        // try to derive a label
+        const derived = f?.label || f?.name || id;
+        labels = { [language_config.primary]: derived };
+      }
+      return { id: String(id), type, labels };
+    });
+
+    const relationships = Array.isArray(form?.relationships) ? form.relationships : [];
+
+    return {
+      title: form?.title || '',
+      description: form?.description || '',
+      language_config,
+      fields_structure,
+      relationships,
+      slug: form?.slug,
+      created_by: form?.created_by,
+    };
+  };
+
   const handleCreate = () => {
     setValidationError('');
     if (!selectedSourceField) return setValidationError('Please choose a source field');
+    if (!sourceFormSlug) return setValidationError('Please choose a source table');
     if (!targetFormSlug || !selectedTargetField) return setValidationError('Please choose a target table and field');
 
-    const exists = currentRelationships.find(r => r.field_id === selectedSourceField);
-    if (exists) {
-      // UI will show replace option — don't auto-remove here
-      return setValidationError('A relationship already exists for this source field. Use Replace to override.');
-    }
-
+    // Build relationship payload
     const r: FormRelationship = {
       field_id: selectedSourceField,
       target_form_slug: targetFormSlug,
       display_field: selectedTargetField,
     };
-    addRelationship(r);
-    setSelectedSourceField(null);
-    setSelectedTargetField(null);
-    setTargetFormSlug(null);
+
+    const persistSlug = persistTo === 'current' ? currentFormSlug : (persistTo === 'source' ? sourceFormSlug : targetFormSlug);
+    if (!persistSlug) return setValidationError('Invalid persist target');
+
+    // If persisting to current form (editor), add into local state
+    if (persistSlug === currentFormSlug) {
+      const exists = currentRelationships.find(r0 => r0.field_id === selectedSourceField);
+      if (exists) return setValidationError('A relationship already exists for this source field on the current form. Use Replace to override.');
+      addRelationship(r);
+      setSelectedSourceField(null);
+      setSelectedTargetField(null);
+      setTargetFormSlug(null);
+      setSourceFormSlug(currentFormSlug);
+      return;
+    }
+
+    // Persist to another form immediately via API (source or target)
+    (async () => {
+      try {
+        const formToUpdate = await apiClient.forms.getForm(persistSlug!);
+        const existing = formToUpdate.relationships || [];
+        // Prevent duplicate
+        if (existing.find((er: any) => er.field_id === selectedSourceField && er.target_form_slug === targetFormSlug && er.display_field === selectedTargetField)) {
+          return setValidationError('That relationship already exists on the selected form.');
+        }
+
+        const updatedRelationships = [...existing, r];
+
+        const sanitized = sanitizeFormForUpdate(formToUpdate);
+        const payload = { ...sanitized, relationships: updatedRelationships };
+
+        await apiClient.forms.updateForm(formToUpdate.slug, payload);
+        const newList = await apiClient.forms.listForms();
+        setForms(newList);
+        setValidationError('');
+        alert('Relationship saved to ' + persistSlug);
+
+        setSelectedSourceField(null);
+        setSelectedTargetField(null);
+        setTargetFormSlug(null);
+        setSourceFormSlug(currentFormSlug);
+      } catch (err: any) {
+        console.error('Failed to persist relationship to other form', err);
+        setValidationError(err?.message || 'Failed to persist relationship');
+      }
+    })();
   };
 
   const handleReplace = () => {
     if (!selectedSourceField) return setValidationError('Select a source field to replace');
     if (!targetFormSlug || !selectedTargetField) return setValidationError('Select a target table and field');
-    removeRelationship(selectedSourceField);
+
     const r: FormRelationship = {
       field_id: selectedSourceField,
       target_form_slug: targetFormSlug,
       display_field: selectedTargetField,
     };
-    addRelationship(r);
-    setSelectedSourceField(null);
-    setSelectedTargetField(null);
-    setTargetFormSlug(null);
-    setValidationError('');
+
+    const persistSlug = persistTo === 'current' ? currentFormSlug : (persistTo === 'source' ? sourceFormSlug : targetFormSlug);
+    if (!persistSlug) return setValidationError('Invalid persist target');
+
+    // Replace locally on current form
+    if (persistSlug === currentFormSlug) {
+      removeRelationship(selectedSourceField);
+      addRelationship(r);
+      setSelectedSourceField(null);
+      setSelectedTargetField(null);
+      setTargetFormSlug(null);
+      setValidationError('');
+      return;
+    }
+
+    // Replace on remote form via API
+    (async () => {
+      try {
+        const formToUpdate = await apiClient.forms.getForm(persistSlug!);
+        const existing = formToUpdate.relationships || [];
+
+        // Remove any existing relation with same source field
+        const filtered = existing.filter((er: any) => er.field_id !== selectedSourceField);
+        const updatedRelationships = [...filtered, r];
+
+        const sanitized = sanitizeFormForUpdate(formToUpdate);
+        const payload = { ...sanitized, relationships: updatedRelationships };
+
+        await apiClient.forms.updateForm(formToUpdate.slug, payload);
+        const newList = await apiClient.forms.listForms();
+        setForms(newList);
+        setSelectedSourceField(null);
+        setSelectedTargetField(null);
+        setTargetFormSlug(null);
+        setValidationError('');
+        alert('Relationship updated on ' + persistSlug);
+      } catch (err: any) {
+        console.error('Failed to replace relationship on remote form', err);
+        setValidationError(err?.message || 'Failed to replace relationship');
+      }
+    })();
   };
 
   const [validationError, setValidationError] = useState<string>('');
@@ -119,18 +257,54 @@ export default function RelationsDesigner({
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* Source form */}
+        {/* Source form selection + fields */}
         <div className="col-span-1 bg-gray-50 p-3 rounded border border-gray-200">
-          <div className="text-sm font-semibold text-gray-800 mb-2">This Form — Fields</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-sm font-semibold text-gray-800">Source — Table & Fields</div>
+            <div className="text-xs text-gray-500">Select source table</div>
+          </div>
+
+          <div className="mb-2">
+            <div className="mb-2">
+              <label className="block text-xs text-gray-600 mb-1">Choose source table</label>
+              <select value={sourceFormSlug ?? ''} onChange={(e) => setSourceFormSlug(e.target.value || null)} className="w-full text-sm border rounded px-2 py-1">
+                <option value="">-- Select table --</option>
+                {currentFormSlug && <option value={currentFormSlug}>Current Form ({currentFormSlug})</option>}
+                {forms.map(f => (
+                  <option key={f.slug} value={f.slug}>{f.title} — {f.slug}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1 max-h-24 overflow-auto">
+              {forms.map(f => (
+                <div key={f.slug} onClick={() => setSourceFormSlug(f.slug)} className={`p-2 rounded cursor-pointer ${sourceFormSlug === f.slug ? 'bg-pink-50 border border-pink-200 shadow-sm' : 'hover:bg-gray-100 border border-transparent'}`}>
+                  <div className="font-medium text-gray-900">{f.title}</div>
+                  <div className="text-[11px] text-gray-600">{f.slug}</div>
+                </div>
+              ))}
+              {forms.length === 0 && <div className="text-xs text-gray-500">No forms available</div>}
+            </div>
+          </div>
+
+          <div className="text-sm font-semibold text-gray-800 mb-2">Fields</div>
           <div className="space-y-2 max-h-64 overflow-auto">
-            {currentFields.map(f => fieldCard(f.label || f.name, f.id, selectedSourceField === f.id, () => setSelectedSourceField(f.id)))}
-            {currentFields.length === 0 && <div className="text-xs text-gray-500">No fields</div>}
+            {sourceFields.map(sf => fieldCard(sf.label, sf.id, selectedSourceField === sf.id, () => setSelectedSourceField(sf.id)))}
+            {sourceFields.length === 0 && <div className="text-xs text-gray-500">Choose a source table to view fields</div>}
           </div>
         </div>
 
         {/* Target forms list */}
         <div className="col-span-1 bg-gray-50 p-3 rounded border border-gray-200">
           <div className="text-sm font-semibold text-gray-800 mb-2">Available Tables</div>
+          <div className="mb-2">
+            <label className="block text-xs text-gray-600 mb-1">Choose target table</label>
+            <select value={targetFormSlug ?? ''} onChange={(e) => setTargetFormSlug(e.target.value || null)} className="w-full text-black text-sm border rounded px-2 py-1">
+              <option value="">-- Select table --</option>
+              {forms.filter(f => f.slug !== currentFormSlug).map(f => (
+                <option className= "text-black" key={f.slug} value={f.slug}>{f.title} — {f.slug}</option>
+              ))}
+            </select>
+          </div>
           <div className="space-y-2 max-h-64 overflow-auto">
             {forms.filter(f => f.slug !== currentFormSlug).map(f => (
               <div key={f.slug} className={`p-2 rounded cursor-pointer ${targetFormSlug === f.slug ? 'bg-pink-50 border border-pink-200 shadow-sm' : 'hover:bg-gray-100 border border-transparent'}`} onClick={() => setTargetFormSlug(f.slug)}>
@@ -158,6 +332,16 @@ export default function RelationsDesigner({
       <div className="mt-4">
         {validationError && <div className="text-sm text-rose-600 mb-2">{validationError}</div>}
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-black">Persist to:</label>
+            <select 
+          
+            value={persistTo} onChange={(e) => setPersistTo(e.target.value as any)} className="text-xs text-pink-900 border rounded px-2 py-1">
+              <option value="current">Current Form</option>
+              <option value="source">Source Form</option>
+              <option value="target">Target Form</option>
+            </select>
+          </div>
           <button
             onClick={handleCreate}
             disabled={!selectedSourceField || !targetFormSlug || !selectedTargetField}
