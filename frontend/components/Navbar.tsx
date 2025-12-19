@@ -249,6 +249,20 @@ export default function Navbar() {
         {/* Quick Links (desktop, pinkish UI) */}
         <div className="hidden lg:flex items-center" style={{ gap: theme.spacing.sm }}>
           <button
+            onClick={() => router.push('/home')}
+            className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"
+            style={{
+              background: 'linear-gradient(135deg, #FF6B8A 0%, #FF8FA3 80%)',
+              color: 'white',
+              boxShadow: '0 2px 8px rgba(255, 107, 138, 0.15)',
+              marginRight: theme.spacing.xs,
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Home
+          </button>
+          <button
             onClick={() => router.push('/categories')}
             className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"
             style={{
@@ -500,7 +514,7 @@ export default function Navbar() {
                       </button>
                     )}
                     <button
-                      onClick={() => { setShowUserMenu(false); router.push('/account'); }}
+                      onClick={() => { setShowUserMenu(false); router.push('/home'); }}
                       style={{
                         width: '100%',
                         display: 'flex',
@@ -864,6 +878,7 @@ export default function Navbar() {
             className="px-4 py-3"
             style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md }}
           >
+            <button onClick={() => { router.push('/home'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Home</button>
             <button onClick={() => { router.push('/categories'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Categories</button>
             <button onClick={() => { router.push('/cart'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Cart</button>
             <button onClick={() => { router.push('/flash-sales'); setShowMobileMenu(false); }} className="text-left py-2 text-gray-700 hover:text-blue-600">Flash Sales</button>
