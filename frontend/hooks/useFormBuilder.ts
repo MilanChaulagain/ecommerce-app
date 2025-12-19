@@ -46,6 +46,7 @@ export function useFormBuilder() {
     setLoading(true);
     try {
       const formData = await apiClient.forms.getForm(slug);
+      console.debug('useFormBuilder.loadForm: fetched form relationships', formData.relationships);
       
       // Convert backend field structure to frontend format
       const frontendFields = formData.fields_structure.map(field => 

@@ -19,14 +19,27 @@ export default function RelationsDesigner({
   addRelationship,
   removeRelationship,
 }: RelationsDesignerProps) {
+  // Debug log incoming relationships prop
+  useEffect(() => {
+    console.debug('RelationsDesigner: currentRelationships prop', currentRelationships);
+  }, [currentRelationships]);
   const [forms, setForms] = useState<FormSchema[]>([]);
   const [sourceFormSlug, setSourceFormSlug] = useState<string | null>(null);
   const [sourceFields, setSourceFields] = useState<{ id: string; label: string }[]>([]);
+  const [sourceFormRelationships, setSourceFormRelationships] = useState<FormRelationship[]>([]);
   const [targetFormSlug, setTargetFormSlug] = useState<string | null>(null);
   const [targetFields, setTargetFields] = useState<{ id: string; label: string }[]>([]);
+  const [targetFormRelationships, setTargetFormRelationships] = useState<FormRelationship[]>([]);
   const [selectedSourceField, setSelectedSourceField] = useState<string | null>(null);
   const [selectedTargetField, setSelectedTargetField] = useState<string | null>(null);
   const [persistTo, setPersistTo] = useState<'current' | 'source' | 'target'>('current');
+
+  // Determine which relationships to display: prefer selected source form, then target form, otherwise the current form's relationships
+  const displayedRelationships = useMemo(() => {
+    if (sourceFormSlug && sourceFormRelationships && sourceFormRelationships.length) return sourceFormRelationships;
+    if (targetFormSlug && targetFormRelationships && targetFormRelationships.length) return targetFormRelationships;
+    return currentRelationships || [];
+  }, [sourceFormSlug, targetFormSlug, sourceFormRelationships, targetFormRelationships, currentRelationships]);
 
   useEffect(() => {
     const load = async () => {
@@ -46,6 +59,7 @@ export default function RelationsDesigner({
     if (!targetFormSlug) {
       setTargetFields([]);
       setSelectedTargetField(null);
+      setTargetFormRelationships([]);
       return;
     }
     (async () => {
@@ -54,6 +68,7 @@ export default function RelationsDesigner({
         const primary = form.language_config?.primary || 'en';
         const fs = form.fields_structure.map(f => ({ id: f.id, label: f.labels?.[primary] || Object.values(f.labels || {})[0] || f.id }));
         setTargetFields(fs);
+        setTargetFormRelationships(Array.isArray(form.relationships) ? form.relationships : []);
       } catch (err) {
         console.error('Failed to load target form fields', err);
         setTargetFields([]);
@@ -65,6 +80,7 @@ export default function RelationsDesigner({
     if (!sourceFormSlug) {
       setSourceFields([]);
       setSelectedSourceField(null);
+      setSourceFormRelationships([]);
       return;
     }
     (async () => {
@@ -80,6 +96,7 @@ export default function RelationsDesigner({
         const primary = form.language_config?.primary || 'en';
         const fs = form.fields_structure.map(f => ({ id: f.id, label: f.labels?.[primary] || Object.values(f.labels || {})[0] || f.id }));
         setSourceFields(fs);
+        setSourceFormRelationships(Array.isArray(form.relationships) ? form.relationships : []);
       } catch (err) {
         console.error('Failed to load source form fields', err);
         setSourceFields([]);
@@ -243,7 +260,7 @@ export default function RelationsDesigner({
         <div className="font-medium text-gray-800 truncate">{label}</div>
         <div className="text-[11px] text-gray-500 truncate">{id}</div>
       </div>
-      {currentRelationships.find(r => r.field_id === id) && (
+      {displayedRelationships.find(r => r.field_id === id) && (
         <div className="ml-3 text-[11px] px-2 py-0.5 bg-pink-100 text-pink-800 rounded-full">Linked</div>
       )}
     </div>
@@ -267,7 +284,7 @@ export default function RelationsDesigner({
           <div className="mb-2">
             <div className="mb-2">
               <label className="block text-xs text-gray-600 mb-1">Choose source table</label>
-              <select value={sourceFormSlug ?? ''} onChange={(e) => setSourceFormSlug(e.target.value || null)} className="w-full text-sm border rounded px-2 py-1">
+              <select value={sourceFormSlug ?? ''} onChange={(e) => setSourceFormSlug(e.target.value || null)} className="w-full text-sm text-pink-400 border rounded px-2 py-1">
                 <option value="">-- Select table --</option>
                 {currentFormSlug && <option value={currentFormSlug}>Current Form ({currentFormSlug})</option>}
                 {forms.map(f => (
@@ -313,6 +330,20 @@ export default function RelationsDesigner({
               </div>
             ))}
           </div>
+          {targetFormSlug && targetFormRelationships.length > 0 && (
+            <div className="mt-2 text-xs text-gray-700">
+              <div className="font-medium text-sm">Target form relationships</div>
+              <div className="text-[11px] text-gray-500">{targetFormRelationships.length} relationship(s)</div>
+              <div className="mt-1 space-y-1">
+                {targetFormRelationships.map(rel => {
+                  const tgt = forms.find(f => f.slug === rel.target_form_slug);
+                  return (
+                    <div key={rel.field_id} className="text-[11px] text-gray-600">{rel.field_id} → {tgt?.title || rel.target_form_slug} ({rel.display_field})</div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Target fields */}
@@ -356,11 +387,11 @@ export default function RelationsDesigner({
           </button>
 
           {/* Replace button shown when a relationship exists for the selected source */}
-          {selectedSourceField && currentRelationships.find(r => r.field_id === selectedSourceField) && (
+          {selectedSourceField && displayedRelationships.find(r => r.field_id === selectedSourceField) && (
             <button onClick={handleReplace} className="px-3 py-2 bg-yellow-500 text-white rounded shadow">Replace Existing</button>
           )}
 
-          <div className="ml-auto text-sm text-gray-600">Existing: <span className="font-medium text-gray-800">{currentRelationships.length}</span></div>
+          <div className="ml-auto text-sm text-gray-600">Existing: <span className="font-medium text-gray-800">{displayedRelationships.length}</span></div>
         </div>
 
         {/* Existing relationships list */}
@@ -375,10 +406,10 @@ export default function RelationsDesigner({
                 <div className="col-span-1 font-medium">Actions</div>
               </div>
               <div className="divide-y divide-gray-100">
-                {currentRelationships.length === 0 && (
+                {displayedRelationships.length === 0 && (
                   <div className="p-3 text-xs text-gray-500">No relationships yet</div>
                 )}
-                {currentRelationships.map(r => {
+                {displayedRelationships.map(r => {
                   const srcField = currentFields.find(f => f.id === r.field_id);
                   const srcLabel = srcField?.label || r.field_id;
                   const targetForm = forms.find(f => f.slug === r.target_form_slug);
