@@ -11,6 +11,7 @@ from .serializers import (
     # FormFileSerializer if needed
 )
 from users.permissions import IsSuperEmployee
+from django.db import transaction, IntegrityError, connection
 
 
 class FormSchemaViewSet(viewsets.ModelViewSet):
@@ -36,6 +37,12 @@ class FormSchemaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """Filter forms by the authenticated user"""
         if self.request.user.is_authenticated:
+            # Allow superusers or super employees to see all forms
+            try:
+                if self.request.user.is_superuser or IsSuperEmployee().has_permission(self.request, self):
+                    return FormSchema.objects.all()
+            except Exception:
+                pass
             return FormSchema.objects.filter(created_by=self.request.user)
         return FormSchema.objects.all()
 
@@ -53,11 +60,68 @@ class FormSchemaViewSet(viewsets.ModelViewSet):
             serializer.save(created_by=default_user)
 
     def destroy(self, request, *args, **kwargs):
-        """Disable deletion"""
-        return Response(
-            {"error": "Deleting forms is not allowed."},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        """Allow deletion for superusers or IsSuperEmployee; otherwise forbid."""
+        if not request.user or not request.user.is_authenticated:
+            return Response({"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # Allow superuser or users passing IsSuperEmployee permission
+        has_super_emp = False
+        try:
+            has_super_emp = IsSuperEmployee().has_permission(request, self)
+        except Exception:
+            has_super_emp = False
+
+        if not (request.user.is_superuser or has_super_emp):
+            return Response({"error": "Only superusers or super employees can delete forms."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Perform deletion: remove related files and submissions first to avoid FK integrity errors
+        form = get_object_or_404(FormSchema, slug=kwargs.get('slug'))
+        try:
+            # First, remove files and submissions inside a transaction and commit
+            with transaction.atomic():
+                files_qs = FormFile.objects.filter(submission__form_schema=form)
+                submissions_qs = FormSubmission.objects.filter(form_schema=form)
+
+                # Debug counts before deletion
+                files_count_before = files_qs.count()
+                subs_count_before = submissions_qs.count()
+                print(f"[form-delete] starting delete for form={form.slug} files_before={files_count_before} subs_before={subs_count_before}")
+
+                # Try to remove files from storage first (ignore storage errors)
+                for f in files_qs:
+                    try:
+                        if getattr(f, 'file', None):
+                            f.file.delete(save=False)
+                    except Exception as ex:
+                        print(f"[form-delete] storage delete failed for file id={f.id}: {ex}")
+                        pass
+
+                # Delete file records and submissions
+                deleted_files = files_qs.delete()
+                deleted_subs = submissions_qs.delete()
+
+                files_count_after_files_delete = FormFile.objects.filter(submission__form_schema=form).count()
+                subs_count_after = FormSubmission.objects.filter(form_schema=form).count()
+                print(f"[form-delete] files_deleted={deleted_files} files_remaining_after_files_delete={files_count_after_files_delete}")
+                print(f"[form-delete] subs_deleted={deleted_subs} subs_remaining_after_subs_delete={subs_count_after}")
+
+            # At this point the deletions are committed. Delete the form in a separate step.
+            try:
+                # Refresh instance to ensure it's up-to-date
+                form.refresh_from_db()
+            except Exception:
+                # form may still exist; ignore refresh errors
+                pass
+
+            try:
+                form.delete()
+            except IntegrityError as e:
+                # If deletion still fails, return helpful error
+                return Response({"error": "Integrity error while deleting form", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({"error": "Failed to delete form", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=['get'])
     def public(self, request, slug=None):
@@ -182,3 +246,42 @@ class FormSubmissionViewSet(viewsets.ModelViewSet):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
+
+    def destroy(self, request, *args, **kwargs):
+        """Safely delete a submission: remove files first, commit, then delete the submission."""
+        submission = self.get_object()
+        try:
+            # Delete files (storage + DB) in a transaction and commit
+            files_qs = FormFile.objects.filter(submission=submission)
+            files_list = list(files_qs)
+            files_count_before = len(files_list)
+            print(f"[submission-delete] submission={submission.id} files_before={files_count_before}")
+            # Try to delete storage files first
+            for f in files_list:
+                try:
+                    if getattr(f, 'file', None):
+                        f.file.delete(save=False)
+                except Exception as ex:
+                    print(f"[submission-delete] storage delete failed for file id={f.id}: {ex}")
+
+            # Ensure DB rows removed - use transaction for safety
+            with transaction.atomic():
+                # Use raw SQL delete to ensure all rows removed regardless of ORM state
+                with connection.cursor() as cursor:
+                    cursor.execute('DELETE FROM forms_app_formsubmissionfile WHERE submission_id = %s', [submission.id])
+                # double-check
+                remaining = FormFile.objects.filter(submission=submission).count()
+                print(f"[submission-delete] files_deleted_db rows_remaining={remaining}")
+
+            # Now delete the submission itself
+            try:
+                submission.delete()
+            except IntegrityError as e:
+                # If deletion still fails, report remaining referencing rows for debugging
+                refs = list(FormFile.objects.filter(submission=submission).values_list('id', flat=True))
+                print(f"[submission-delete] IntegrityError deleting submission id={submission.id}, remaining file refs={refs}")
+                return Response({"error": "Integrity error while deleting submission", "detail": str(e), "remaining_file_ids": refs}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception as e:
+            return Response({"error": "Failed to delete submission", "detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

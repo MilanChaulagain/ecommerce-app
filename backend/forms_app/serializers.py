@@ -21,7 +21,8 @@ class FormSchemaSerializer(serializers.ModelSerializer):
             'fields_structure', 'relationships', 'created_by',
             'created_by_username', 'created_at', 'updated_at', 'submission_count'
         ]
-        read_only_fields = ['slug', 'created_at', 'updated_at']
+        # created_by is set server-side in perform_create, expose it read-only
+        read_only_fields = ['slug', 'created_at', 'updated_at', 'created_by']
 
     def get_submission_count(self, obj):
         return obj.submissions.count()

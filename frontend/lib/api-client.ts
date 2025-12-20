@@ -160,10 +160,34 @@ export class APIError extends Error {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    const ct = response.headers.get('content-type') || '';
+    let errorData: any = {};
+    if (ct.includes('application/json')) {
+      errorData = await response.json().catch(() => ({}));
+    } else {
+      // Try to capture any text error body
+      const txt = await response.text().catch(() => '');
+      if (txt) errorData = { message: txt };
+    }
     throw new APIError(response.status, response.statusText, errorData);
   }
-  return response.json();
+
+  // No content
+  if (response.status === 204) return (undefined as unknown) as T;
+
+  const ct = response.headers.get('content-type') || '';
+  if (ct.includes('application/json')) {
+    return response.json();
+  }
+
+  // Fallback: try to read text and parse if present
+  const text = await response.text().catch(() => '');
+  if (!text) return (undefined as unknown) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return (text as unknown) as T;
+  }
 }
 
 // ==================== HTTP Client ====================
@@ -480,6 +504,13 @@ export const submissionsAPI = {
    */
   async getSubmission(id: number): Promise<FormSubmission> {
     return request<FormSubmission>(`/api/submissions/${id}/`, { requireAuth: true });
+  },
+  /**
+   * Delete a specific submission
+   * Backend endpoint: DELETE /api/submissions/{id}/
+   */
+  async deleteSubmission(id: number): Promise<void> {
+    return request<void>(`/api/submissions/${id}/`, { method: 'DELETE', requireAuth: true });
   },
 };
 

@@ -52,6 +52,37 @@ export default function SubmissionsTable() {
     }
   }
 
+  async function handleDeleteSubmission(formSlug: string, submissionId: number) {
+    if (!confirm('Delete this submission? This action cannot be undone.')) return;
+    try {
+      await apiClient.submissions.deleteSubmission(submissionId);
+      setSubmissionsMap(prev => ({ ...prev, [formSlug]: (prev[formSlug] || []).filter(s => s.id !== submissionId) }));
+      setForms(prev => prev.map(f => f.slug === formSlug ? { ...f, submission_count: Math.max(0, (f.submission_count||0) - 1) } : f));
+      alert('Submission deleted');
+    } catch (err: any) {
+      console.error('Delete failed', err);
+      alert(`Failed to delete submission: ${err?.data?.message || err?.message || err}`);
+    }
+  }
+
+  async function handleDeleteAll(formSlug: string) {
+    if (!confirm('Delete ALL submissions for this form? This cannot be undone.')) return;
+    const subs = submissionsMap[formSlug] || [];
+    if (!subs.length) return alert('No submissions to delete');
+    try {
+      for (const s of subs) {
+        // sequential deletes to avoid overwhelming backend
+        await apiClient.submissions.deleteSubmission(s.id);
+      }
+      setSubmissionsMap(prev => ({ ...prev, [formSlug]: [] }));
+      setForms(prev => prev.map(f => f.slug === formSlug ? { ...f, submission_count: 0 } : f));
+      alert('All submissions deleted');
+    } catch (err: any) {
+      console.error('Bulk delete failed', err);
+      alert(`Failed to delete all submissions: ${err?.data?.message || err?.message || err}`);
+    }
+  }
+
   if (loadingForms) return <div>Loading forms…</div>;
   if (formsError) return <div className="text-red-600">{formsError}</div>;
 
@@ -90,6 +121,16 @@ export default function SubmissionsTable() {
                       <div>
                         <h4 className="text-sm font-medium text-gray-800 mb-2">Submissions for {f.title}</h4>
                         <div className="overflow-auto border rounded bg-white">
+                          <div className="p-3 flex justify-end gap-2">
+                            {(() => {
+                              const curUser = apiClient.auth.getUser();
+                              const allowed = curUser && (curUser.role === 'admin' || curUser.role === 'superemployee');
+                              if (!allowed) return null;
+                              return (
+                                <button onClick={() => handleDeleteAll(f.slug)} className="px-3 py-1 bg-red-600 text-white rounded text-sm">Delete All</button>
+                              );
+                            })()}
+                          </div>
                           <table className="min-w-full text-sm">
                             <thead className="bg-white border-b">
                               <tr>
@@ -108,7 +149,17 @@ export default function SubmissionsTable() {
                                   <td className="px-4 py-3 text-gray-900">{new Date(s.submitted_at).toLocaleString()}</td>
                                   <td className="px-4 py-3 text-gray-900">{typeof s.data === 'object' ? JSON.stringify(s.data).slice(0, 80) : String(s.data).slice(0, 80)}</td>
                                   <td className="px-4 py-3 text-right">
-                                    <button onClick={() => setSelected({ ...s, form_title: f.title })} className="px-2 py-1 bg-pink-600 text-white rounded text-sm">View</button>
+                                    <div className="flex items-center gap-2 justify-end">
+                                      <button onClick={() => setSelected({ ...s, form_title: f.title })} className="px-2 py-1 bg-pink-600 text-white rounded text-sm">View</button>
+                                      {(() => {
+                                        const curUser = apiClient.auth.getUser();
+                                        const allowed = curUser && (curUser.role === 'admin' || curUser.role === 'superemployee');
+                                        if (!allowed) return null;
+                                        return (
+                                          <button onClick={() => handleDeleteSubmission(f.slug, s.id)} className="px-2 py-1 bg-red-50 text-red-700 rounded text-sm border">Delete</button>
+                                        );
+                                      })()}
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -209,4 +260,4 @@ export default function SubmissionsTable() {
     if (Array.isArray(value) || typeof value === 'object') return <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>;
     return <span>{String(value)}</span>;
   }
-}
+  }

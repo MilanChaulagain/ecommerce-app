@@ -74,13 +74,7 @@ export default function AdminDashboard() {
 
 
   const handleDeleteForm = async (formSlug: string) => {
-    // Note: Backend has DELETE disabled (returns 403)
-    // This function is kept for future use if DELETE is enabled
-    alert('Delete functionality is currently disabled by the backend.');
-    
-    // Uncomment when backend enables DELETE
-    /*
-    if (!confirm('Are you sure you want to delete this form?')) return;
+    if (!confirm('Are you sure you want to permanently delete this form? This action cannot be undone.')) return;
 
     try {
       await apiClient.forms.deleteForm(formSlug);
@@ -88,9 +82,9 @@ export default function AdminDashboard() {
       fetchDashboardData(); // Refresh data
     } catch (error: any) {
       console.error('Error deleting form:', error);
-      alert(`Failed to delete form: ${error?.data?.detail || error.message}`);
+      const msg = error?.data?.error || error?.data?.detail || error?.message || String(error);
+      alert(`Failed to delete form: ${msg}`);
     }
-    */
   };
 
   const statCards = [

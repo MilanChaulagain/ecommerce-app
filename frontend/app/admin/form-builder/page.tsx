@@ -35,9 +35,9 @@ export default function FormBuilderPage() {
       router.push('/admin/login');
       return;
     }
-    
-    if (currentUser.role !== 'superemployee') {
-      alert('Access denied. Only Super Employees can access the form builder.');
+    const allowedRoles = ['superemployee', 'admin'];
+    if (!allowedRoles.includes(currentUser.role)) {
+      alert('Access denied. Only Admins and Super Employees can access the form builder.');
       router.push('/admin/dashboard');
       return;
     }
