@@ -276,7 +276,7 @@ export default function Navbar() {
           >
             Categories
           </button>
-          <button
+          {/* <button
             onClick={() => router.push('/cart')}
             className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"
             style={{
@@ -289,7 +289,7 @@ export default function Navbar() {
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}
           >
             Cart
-          </button>
+          </button> */}
           <button
             onClick={() => router.push('/flash-sales')}
             className="text-sm font-semibold px-4 py-2 rounded-full shadow-md transition-all duration-150 cursor-pointer"

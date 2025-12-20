@@ -12,7 +12,7 @@ export default function RoleHomeWrapper({ children }: { children: React.ReactNod
             <div className="mb-4 font-bold text-pink-400">Workspace</div>
             <nav className="flex flex-col gap-2 text-sm">
               <Link href="/home" className="text-sky-600">Home</Link>
-              <Link href="/admin" className="text-gray-600">Admin Dashboard</Link>
+              <Link href="/admin/dashboard" className="text-gray-600">Admin Dashboard</Link>
               <Link href="/account" className="text-gray-600">Account</Link>
             </nav>
           </aside>
